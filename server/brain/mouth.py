@@ -423,13 +423,16 @@ class NoBuiltinVoice(RuntimeError):
     """This computer has no speech engine we know how to drive."""
 
 
-# PowerShell script for Windows' built-in speech engine: text on stdin,
-# 16 kHz mono WAV out. Built and tested on macOS; this path is untested.
+# PowerShell script for Windows' built-in speech engine: text on stdin (UTF-8),
+# 16 kHz mono WAV out to the path in $env:DESK_ROBOT_TTS_OUT. Con -Command los argumentos
+# sobrantes se pegan al script en vez de llegar a $args, así que la ruta va por el entorno.
 _WINDOWS_TTS = """
+$ErrorActionPreference = 'Stop'
+[Console]::InputEncoding = [System.Text.Encoding]::UTF8
 Add-Type -AssemblyName System.Speech
 $fmt = New-Object System.Speech.AudioFormat.SpeechAudioFormatInfo(16000, [System.Speech.AudioFormat.AudioBitsPerSample]::Sixteen, [System.Speech.AudioFormat.AudioChannel]::Mono)
 $s = New-Object System.Speech.Synthesis.SpeechSynthesizer
-$s.SetOutputToWaveFile($args[0], $fmt)
+$s.SetOutputToWaveFile($env:DESK_ROBOT_TTS_OUT, $fmt)
 $s.Speak([Console]::In.ReadToEnd())
 $s.Dispose()
 """
@@ -441,16 +444,19 @@ def _synthesize_builtin(text: str) -> bytes:
     into options ("-f /etc/hosts" would make `say` read a file)."""
     with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as f:
         path = f.name
+    env = None
     try:
         if sys.platform == "darwin":
             cmd = ["say", "-v", config.TTS_FALLBACK_VOICE, "-o", path, "--data-format=LEI16@16000"]
         elif sys.platform == "win32":
-            cmd = ["powershell", "-NoProfile", "-NonInteractive", "-Command", _WINDOWS_TTS, path]
+            cmd = ["powershell", "-NoProfile", "-NonInteractive", "-Command", _WINDOWS_TTS]
+            env = {**os.environ, "DESK_ROBOT_TTS_OUT": path}
         elif shutil.which("espeak-ng") or shutil.which("espeak"):
             cmd = [shutil.which("espeak-ng") or "espeak", "--stdin", "-w", path]
         else:
             raise NoBuiltinVoice("no built-in voice on this system (install espeak-ng, or set FISH_AUDIO_API_KEY)")
-        subprocess.run(cmd, input=text.encode(), check=True, timeout=60)
+        subprocess.run(cmd, input=text.encode("utf-8"), check=True, timeout=60, env=env,
+                       creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
         with open(path, "rb") as f:
             wav = f.read()
     finally:
@@ -518,7 +524,7 @@ def _save_clip(pcm: bytes, text: str) -> None:
         path = os.path.join(d, f"{stamp}.wav")
         with wave.open(path, "wb") as w:
             w.setnchannels(1); w.setsampwidth(2); w.setframerate(SAMPLE_RATE); w.writeframes(pcm)
-        with open(path[:-4] + ".txt", "w") as f:
+        with open(path[:-4] + ".txt", "w", encoding="utf-8") as f:
             f.write(text + "\n")
         wavs = [f for f in os.listdir(d) if f.endswith(".wav")]
         old = sorted(wavs, key=lambda f: os.path.getmtime(os.path.join(d, f)))[:-30]
