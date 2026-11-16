@@ -69,6 +69,7 @@ const robot = {
     setInterval(() => this.tickClock(), 1000);
     this.tickClock();
     setupGrip();
+    window.pywebview.api.loaded();                                   // Python entrega lo que llegó antes
   },
 
   handle(msg) {

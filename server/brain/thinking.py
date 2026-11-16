@@ -205,6 +205,9 @@ class RobotBrain:
             content.append(_image_part(jpeg))
         elif camera_wanted:
             content.append({"type": "text", "text": "(Your camera has no fresh picture right now, so you cannot see anything at the moment.)"})
+        elif config.SEND_CAMERA_TO_BRAIN and config.VISION_EVERY_QUESTION:
+            # Sin foto de contexto (cámara apagada o sin webcam): que no presuma de ver bien.
+            content.append({"type": "text", "text": "(Your camera is giving you no picture right now: you cannot see anything, so never say you can see or that your camera works.)"})
         user_msg = {"role": "user", "content": content}
         self.history.append(user_msg)
         mark = len(self.history) - 1

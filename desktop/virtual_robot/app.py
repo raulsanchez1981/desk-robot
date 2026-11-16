@@ -41,10 +41,14 @@ def active_pack_id() -> str:
 
 
 class FaceWindow:
-    def __init__(self, state: settings.WindowState) -> None:
+    def __init__(self, state: settings.WindowState, start_asleep: bool = False) -> None:
         self.state = state
+        self.start_asleep = start_asleep     # con cerebro arranca dormida, como la placa, hasta que él diga
         self.hwnd = 0
-        self.ready = threading.Event()
+        self.ready = threading.Event()       # la ventana existe
+        self.loaded = threading.Event()      # robot.js ya pinta la cara y acepta mensajes
+        self._pending: list[dict] = []
+        self._pending_lock = threading.Lock()
         faces = _brain_faces()
         x, y, size = settings.place(state, win32.monitors(), win32.work_area())
         self.size = size
@@ -94,8 +98,20 @@ class FaceWindow:
                     print(f"(no pude guardar la posición de la ventana: {e})")
 
     def send(self, msg: dict) -> None:
-        """Un mensaje con forma de protocolo para la cara (desde cualquier hilo)."""
-        self.window.evaluate_js(f"window.robot && robot.handle({json.dumps(msg)})")
+        """Un mensaje con forma de protocolo para la cara (desde cualquier hilo). Los que llegan antes de que la
+        cara cargue se guardan y se entregan después, en orden."""
+        with self._pending_lock:
+            if not self.loaded.is_set():
+                self._pending.append(msg)
+                return
+        self.window.evaluate_js(f"robot.handle({json.dumps(msg)})")
+
+    def on_loaded(self) -> None:
+        with self._pending_lock:
+            pending, self._pending = self._pending, []
+            self.loaded.set()
+        for msg in pending:
+            self.window.evaluate_js(f"robot.handle({json.dumps(msg)})")
 
     def state_js(self) -> dict | None:
         return self.window.evaluate_js("window.robot && robot.sim ? robot.state() : null")
@@ -110,7 +126,11 @@ class _FaceApi:
     def init(self) -> dict:
         _, rocky = self._faces.load_or_default("rocky")
         _, pack = self._faces.load_or_default(active_pack_id())
-        return {"emotions": self._faces.EMOTIONS, "fallback": rocky, "pack": pack, "asleep": False}
+        return {"emotions": self._faces.EMOTIONS, "fallback": rocky, "pack": pack, "asleep": self._owner.start_asleep}
+
+    def loaded(self) -> bool:
+        threading.Thread(target=self._owner.on_loaded, daemon=True).start()   # no bloquear el hilo de JS
+        return True
 
     def resize(self, size: int, final: bool = False) -> int:
         return self._owner.resize(size, final)
@@ -119,8 +139,8 @@ class _FaceApi:
 class _DebugApi:
     """Lo que ui/debug.html puede pedir a Python: mandar mensajes a la cara y leer packs."""
 
-    def __init__(self, face: FaceWindow, faces) -> None:
-        self._face, self._faces = face, faces
+    def __init__(self, face: FaceWindow, faces, link=None) -> None:
+        self._face, self._faces, self._link = face, faces, link
 
     def info(self) -> dict:
         packs = [{"id": p["id"], "name": p.get("pack", {}).get("name", p["id"])}
@@ -139,13 +159,23 @@ class _DebugApi:
         return True
 
     def state(self) -> dict | None:
-        return self._face.state_js()
+        s = self._face.state_js()
+        if s is not None:
+            s["link"] = self._link.status if self._link is not None else "sin enlace (--no-brain)"
+            s["speaking"] = bool(self._link and self._link.speaker.speaking)
+            s["mic"] = bool(self._link and self._link.mic.wanted and not self._link.speaker.speaking)
+        return s
 
 
-def run(debug: bool) -> None:
+def run(debug: bool, brain: bool = True) -> None:
     win32.make_dpi_aware()
-    face = FaceWindow(settings.load())
+    face = FaceWindow(settings.load(), start_asleep=brain)
+    link = None
+    if brain:
+        from .link import BrainLink
+        link = BrainLink(face.send)
+        link.start()
     if debug:
-        webview.create_window(DEBUG_TITLE, url=str(UI / "debug.html"), js_api=_DebugApi(face, _brain_faces()),
-                              width=480, height=760, min_size=(400, 500))
+        webview.create_window(DEBUG_TITLE, url=str(UI / "debug.html"), js_api=_DebugApi(face, _brain_faces(), link),
+                              width=480, height=800, min_size=(400, 500))
     webview.start(private_mode=True)

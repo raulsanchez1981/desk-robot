@@ -377,3 +377,47 @@ pan 60 / tilt 20, boca hablando, dormir → reloj a los 5 s, posición guardada.
 
 **No probado por mí**: arrastrar con el ratón y redimensionar desde el asa (necesitan tu mano); el panel de
 depuración solo lo he abierto, no clicado.
+
+---
+
+## FASE 3 — La ventana conectada al cerebro como robot virtual
+
+Arranque: el cerebro como siempre (`python -m brain.main` o el launcher) y, aparte,
+`..\server\.venv\Scripts\python -m virtual_robot [--debug]` desde `desktop/`. Si el cerebro no está, la cara se
+duerme (reloj) y reintenta cada 3 s, como la placa.
+
+**Cómo está hecho** (`virtual_robot/link.py`, `audio.py`)
+
+- Cliente WebSocket a `ws://127.0.0.1:8765` con `hello` (`who: virtual-robot`, `fw: virtual-0.1.0`, token de
+  `server/.env`, nunca impreso). Sin cabecera Origin, que es lo que el servidor exige. Sin tocar `server/` para
+  esto: el cerebro lo trata como a la placa (micro del robot, voz por el robot, `speak_done`).
+- Mensajes de cara (`emotion`, `pan`, `tilt`, `asleep`, `face`, `motion`, `settings`…) → `robot.handle()`. Los que
+  llegan antes de que cargue la ventana se encolan y se entregan en orden.
+- Voz: frames `0x01` a un buffer; empieza con 200 ms de colchón; boca con el RMS de lo que suena, retrasado la
+  latencia del dispositivo (200 ms con MME); `speak_done` cuando ha salido todo + latencia.
+- Micro: 30 ms / 480 muestras a 16 kHz, solo si el cerebro lo pide (`mic on`). **Anti-eco**: cortado mientras
+  suena la voz y 0,35 s después; el cerebro además no escucha hasta `speak_done`.
+- `state` cada 5 s. `stream`/`snapshot` se ignoran hasta la fase 5 (una pregunta visual espera ~1 s la foto que no
+  llega y sigue sin imagen).
+- Cambio en `server/brain/thinking.py`: sin foto de contexto, se le dice al modelo que no ve nada (antes, sin
+  webcam, decía que veía bien).
+
+**Fallo encontrado y arreglado**: al vaciarse el buffer, el callback de audio "rearrancaba" la reproducción en cada
+bloque y `speak_done` nunca salía (el cerebro esperaba su timeout). Ahora cada respuesta arranca una vez; test de
+regresión en `tests/test_link_audio.py`.
+
+**Probado de verdad** (cerebro real + ventana, pregunta por consola): "robot connected! (fw virtual-0.1.0…)", el
+cerebro escucha por el "robot mic", respuesta en español, la voz suena por el altavoz del PC, boca moviéndose,
+micro cortado todo el rato que sonó, `speak_done` a tiempo (sin "robot never said it finished speaking"), y al
+cerrar el cerebro la cara se duerme. 15 tests de `desktop/` y 125 del cerebro OK.
+
+**No probado por mí**: una conversación por voz con la ventana (necesita que hables), el eco con altavoces en vez
+de auriculares.
+
+---
+
+## FASE 6 (nueva) — Rediseño de la interfaz
+
+Pedida el 2026-11-16, para cuando todo funcione: caras de más resolución (ahora son los 128×64 píxeles del OLED
+escalados, se ven pixeladas), otros personajes y animaciones. Punto de partida: `robot.handle(msg)` ya separa el
+protocolo del dibujo, así que un renderizador nuevo solo tiene que implementar emociones, cuello, boca y sueño.
