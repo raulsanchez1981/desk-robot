@@ -1,0 +1,7 @@
+{
+  "id": "rocky",
+  "name": "Rocky",
+  "description": "El ingeniero eridiano de Project Hail Mary. Integrado en el cerebro (server/brain/personality.py y, en español, server/brain/language.py). Fan work, uso personal.",
+  "builtin": true,
+  "face": "rocky"
+}

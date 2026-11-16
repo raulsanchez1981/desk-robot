@@ -15,7 +15,7 @@ from pathlib import Path
 
 import webview
 
-from . import autostart, brain_process, settings, win32
+from . import autostart, brain_process, characters, settings, win32
 
 ROOT = Path(__file__).resolve().parents[2]
 SERVER = ROOT / "server"
@@ -352,6 +352,42 @@ class Controller:
     def restart_brain(self) -> None:
         if self.brain is not None:
             print(f"robot virtual: {self.brain.restart()}")
+
+    # ── personajes ──────────────────────────────────────────────────────────────────────────────────────────────
+    def characters(self) -> list[dict]:
+        return characters.packages()
+
+    def active_character(self) -> str:
+        try:
+            return characters.active_id()
+        except Exception:   # noqa: BLE001 - settings.json roto: que el menú no falle
+            return "rocky"
+
+    def switch_character(self, pkg_id: str) -> None:
+        """Cambia personalidad, voz y cara de golpe: instala el paquete y reinicia el cerebro."""
+        if pkg_id == self.active_character():
+            return
+        try:
+            pkg = characters.activate(pkg_id)
+        except (OSError, ValueError) as e:
+            print(f"robot virtual: no puedo cambiar a {pkg_id}: {e}")
+            if self.tray is not None:
+                self.tray.notify(f"No puedo cambiar de personaje: {e}")
+            return
+        print(f"robot virtual: personaje -> {pkg['name']}")
+        if self.tray is not None:
+            self.tray.refresh()
+        if self.brain is None:
+            return
+        if self.brain.external:
+            msg = f"{pkg['name']} elegido. Reinicia el cerebro donde lo arrancaste para que cambie."
+            print(f"robot virtual: {msg}")
+            if self.tray is not None:
+                self.tray.notify(msg)
+            return
+        if self.tray is not None:
+            self.tray.notify(f"Cambiando a {pkg['name']}…")
+        print(f"robot virtual: {self.brain.restart()}")
 
     def toggle_autostart(self) -> None:
         try:

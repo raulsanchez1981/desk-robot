@@ -534,3 +534,23 @@ cerebro, volumen 0,7; VAD Silero del cerebro sobre la grabación; 3 repeticiones
 - Si Fish dejara de aceptarlo, el cerebro cae solo a la voz de Windows ("fish audio failed, using the built-in voice").
 - Voces locales probadas antes (Piper davefx/sharvard, Kokoro dora/alex/santa): no convencieron. Alternativa futura:
   clonación local en la GPU (RTX 4070 SUPER) con XTTS-v2 o Chatterbox.
+
+---
+
+## Paquetes de personajes (2026-11-16)
+
+- `desktop/characters/<id>/package.json`: nombre, descripción, **cara** (pack del cerebro), y la ficha que ya entiende
+  el cerebro (`brain/characters.py`: voz de Fish, prompt, ejemplos, frases fijas, palabras de activación), más un
+  bloque `"es"` con ejemplos, frases y variantes de activación en español. Rocky es `builtin` (su personalidad sigue
+  en `personality.py` / `language.py`).
+- `virtual_robot/characters.py`: activar = `brain.characters.save()` en `server/characters/<id>.json` +
+  `brain.settings.update()` de `character.id` y `face.pack` (misma validación que el dashboard) y reiniciar el
+  cerebro (si lo arrancó la app; si no, avisa).
+- Bandeja: submenú **Personaje** con los paquetes (marca el activo).
+- Incluidos: **Rocky** (cara Default) y **Jarvis** (voz Fish `34a174c4…`, cara Visor; mayordomo británico, "señor",
+  "usted"). Ambos fan work, uso personal.
+- Probado de punta a punta: Rocky → Jarvis (cerebro reiniciado como "Jarvis brain server", cara Visor, respuesta
+  "Estoy en perfectas condiciones, señor, dentro de lo que cabe para un robot de sobremesa…" con su voz de Fish) →
+  Rocky (cara Default). 31 tests de `desktop/`, cada paquete validado con `brain.characters.clean` en en/es.
+- Pendiente: cada personaje con su propio estilo de dibujo y animaciones (fase 6); el reloj del cerebro sale en 12 h
+  por defecto (cambiar en el dashboard).

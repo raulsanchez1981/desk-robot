@@ -36,6 +36,11 @@ class Tray:
             item(lambda _: f"{'Despertar' if app.asleep else 'Dormir'}  ({app.HOTKEYS['sleep']})",
                  self._do(app.toggle_sleep)),
             pystray.Menu.SEPARATOR,
+            item("Personaje", pystray.Menu(*[
+                item(p["name"], self._do(lambda pid=p["id"]: app.switch_character(pid)),
+                     checked=lambda _, pid=p["id"]: app.active_character() == pid, radio=True)
+                for p in app.characters()])),
+            pystray.Menu.SEPARATOR,
             item("Panel de depuración", self._do(app.open_debug)),
             item("Panel web del cerebro", self._do(app.open_web)),
             item("Reiniciar el cerebro", self._do(app.restart_brain)),
