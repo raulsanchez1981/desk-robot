@@ -305,9 +305,14 @@ Entorno: Windows 11 Pro, Python 3.13.17 (winget, junto al 3.12 existente), venv 
    se cae, porque esos caracteres existen en cp1252). El launcher ahora fija `PYTHONIOENCODING=utf-8` y lee en
    UTF-8. Cualquier proceso nuestro que lance el cerebro debe hacer lo mismo.
 
+- Conversación con Claude Haiku 5.5 **directo en Anthropic** (`LLM_BASE_URL=https://api.anthropic.com/v1/`,
+  `LLM_MODEL=claude-haiku-5-5`) por el endpoint compatible con OpenAI: respuesta en personaje, etiqueta de emoción
+  (`excited`, `happy`), recorte a 3 frases y llamada a herramienta (`look` izquierda → pan −40°). Primer audio a
+  1,2-1,8 s del final de la pregunta con la voz de Windows.
+
 **No probado todavía**
 
-- Conversación real (falta `LLM_API_KEY` en `server/.env`), voz de Fish Audio (`FISH_AUDIO_API_KEY`).
+- Voz de Fish Audio (sin `FISH_AUDIO_API_KEY`).
 - Palabra de activación y transcripción con tu voz (requiere que hables tú).
 - Que el audio se oiga bien: yo no puedo oírlo; la duración de la reproducción cuadra.
 - El launcher (`launcher.py`, dashboard en :8766) en Windows.
