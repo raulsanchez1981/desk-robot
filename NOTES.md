@@ -1,5 +1,161 @@
 # Robot virtual para Windows — notas de trabajo
 
+## ▶ ESTADO Y CÓMO RETOMAR (actualizado 2026-11-16, fin de la sesión 1)
+
+Esta sección es el punto de entrada. Debajo, las notas por fase en orden cronológico (histórico y detalles).
+
+### Qué es esto
+
+Un **robot virtual para Windows** sobre el proyecto open source desk-robot de Casey (MIT): una ventanita siempre
+encima con la cara del robot que se conecta al "cerebro" Python (`server/`) igual que la placa ESP32, por WebSocket
+con `ROBOT_TOKEN`. Usa micro, altavoces y webcam del PC. Habla en español, con voces de Fish Audio, personajes
+intercambiables (Rocky, Jarvis) y memoria a largo plazo.
+
+### Repositorio y git
+
+- Carpeta: `C:\dev\desk-robot`. Rama de trabajo: **`feat/robot-virtual-windows`** (19 commits sobre `main`, todo
+  subido). `main` sigue igual que el upstream.
+- Remotos: `origin` = fork del usuario `git@github.com:raulsanchez1981/desk-robot.git` (público);
+  `upstream` = `https://github.com/cgro00/desk-robot.git` (push deshabilitado a propósito).
+- Traer cambios de Casey: `git fetch upstream && git merge upstream/main` en la rama; después
+  `server\.venv\Scripts\python desktop\tools\sync_facekit.py` (copia el dibujo de caras del dashboard) y pasar los
+  tests de los dos lados. Los cambios en `server/` son pequeños y localizados para que los conflictos sean raros.
+- Autorización: commits pequeños **y push** a esta rama sin preguntar (nunca a `main`, nunca a upstream).
+  Conventional Commits en español, con la línea `Co-Authored-By` del entorno.
+
+### Entorno instalado
+
+- Windows 11 Pro, Ryzen 7 9700X, 31 GB RAM, **RTX 4070 SUPER 12 GB**. Python **3.13.17** (winget, convive con 3.12).
+- Venv único: `server\.venv` con `server/requirements.txt` + `desktop/requirements.txt` (pywebview 6.2.1,
+  pystray 0.19.5, pillow 13.0.0). Otros: websockets 17.1, sounddevice 0.5.6, mediapipe 1.1.0, faster-whisper 1.2.1,
+  onnxruntime 1.29.0, openai 3.8.0, numpy 2.5.2, pythonnet 3.2.1. WebView2 157 presente.
+- Dispositivos: micro por defecto **Logitech StreamCam**, salida **Altavoces (USB2.0 Device)**, ambos MME. Webcam
+  real = índice 1 de OpenCV (el 0 es una cámara virtual que da negro; la app la salta sola).
+- Temporal (puede haber desaparecido): venv `ttsvenv` y modelos Piper/Kokoro en el scratchpad de la sesión 1; solo
+  sirvieron para comparar voces locales.
+
+### Cómo se arranca y se prueba
+
+    cd C:\dev\desk-robot\desktop
+    ..\server\.venv\Scripts\python -m virtual_robot            # la app: arranca cerebro + dashboard + bandeja
+    ..\server\.venv\Scripts\python -m virtual_robot --debug    # + panel de depuración
+    ..\server\.venv\Scripts\python -m virtual_robot --no-brain --debug   # solo la cara
+    # sin consola (lo que usa el arranque con Windows): server\.venv\Scripts\pythonw.exe desktop\run_virtual_robot.pyw
+
+    # tests
+    cd C:\dev\desk-robot\server  && .venv\Scripts\python -m unittest discover -s tests -p "test_*.py"   # 132
+    cd C:\dev\desk-robot\desktop && ..\server\.venv\Scripts\python -m unittest discover -s tests       # 31
+
+- El cerebro solo: `cd server && .venv\Scripts\python -m brain.main` (consola: `ask …`, `say …`, `memory`, `status`,
+  `quit`). Si la app ve un cerebro ya escuchando en 8765, usa ese.
+- En PowerShell, `tests/test_*.py` no se expande: usar `discover`. Poner `PYTHONIOENCODING=utf-8` si se lee la salida
+  del cerebro por un pipe.
+
+### Configuración y datos (dónde está cada cosa)
+
+| Qué | Dónde | Estado ahora |
+| --- | --- | --- |
+| Secretos | `server/.env` (git-ignored) | Puestos: `LLM_API_KEY` (Anthropic), `LLM_BASE_URL=https://api.anthropic.com/v1/`, `LLM_MODEL=claude-haiku-5-5`, `FISH_AUDIO_API_KEY`, `FISH_TTS_MODEL=s2.1-pro-free`, `ROBOT_TOKEN`, `ROBOT_LANGUAGE=es`. Vacíos: `OPENAI_API_KEY`, `HUMAN_NAME`, Spotify, `MIC_DEVICE`. **Nunca imprimir valores.** |
+| Ajustes del cerebro | `server/settings.json` (git-ignored; se edita en el dashboard 8766) | `character.id = jarvis`, `face.pack = visor` (el usuario dejó Jarvis activo), `rocky.camera_rotate = 0` (lo puso la app; para el robot físico sería 270), `human_name` vacío, reloj en 12 h por defecto |
+| Ajustes de la app | `%APPDATA%\desk-robot-virtual\config.json` | ventana x=1919 y=169 ancho=686; `hotkeys` mic `Ctrl+Alt+Shift+M`, cam `Ctrl+Alt+C`, sleep `Ctrl+Alt+S`; opcionales `camera_index`, `echo_tail_s` |
+| Logs | `%APPDATA%\desk-robot-virtual\` `brain.log`, `launcher.log`, `app.log` (sin consola) | secretos enmascarados |
+| Memoria | `server/memory.json` (git-ignored) | **no existe** (se borraron los recuerdos de prueba) |
+| Personajes instalados | `server/characters/jarvis.json` (git-ignored; lo escribe la app desde el paquete) | |
+| Paquetes de personaje | `desktop/characters/<id>/package.json` (en git) | `rocky`, `jarvis` |
+| Arranque con Windows | `HKCU\Software\Microsoft\Windows\CurrentVersion\Run\DeskRobotVirtual` | **no activado**: el entorno no me dejó escribir el registro; el usuario debe marcarlo en la bandeja |
+
+### Arquitectura en una pantalla
+
+    desktop/virtual_robot/          (nuestro; Python + una página en WebView2)
+      __main__.py   argumentos; con pythonw manda la salida a app.log
+      app.py        Controller: ventana, enlace, cerebro, launcher, bandeja, atajos, personajes, salida limpia
+      link.py       WebSocket como firmware/src/link.cpp: hello+token, mensajes -> cara, state cada 5 s
+      audio.py      Speaker (voz del cerebro, colchón 200 ms, speak_done al sonar todo, boca por RMS) y Mic
+                    (30 ms, cortado mientras habla + echo_tail 0,35 s)
+      camera.py     webcam -> 0x02 stream / 0x03 foto nítida; 1280x720, espejada; liberada con el interruptor
+      brain_process.py  cerebro y launcher como hijos, logs enmascarados, API local (/api, /status)
+      characters.py paquetes de personaje -> brain.characters.save + brain.settings.update
+      tray.py, hotkeys.py, autostart.py, settings.py, win32.py
+      ui/face.html + robot.js (cara 2:1 negra, rasgos blancos, cuello con el perfil de los servos, reloj al dormir)
+      ui/facekit.js (GENERADO desde server/brain/dashboard.html por tools/sync_facekit.py; no editar)
+      ui/debug.html (panel de depuración)
+    server/brain/ (de Casey) + cambios nuestros: language.py (español), memory.py (memoria), thinking.py (nota sin
+      cámara, memoria, fecha, filtro de pensar en voz alta), mouth.py (voz de reserva Windows), config.py (idioma,
+      FISH_TTS_MODEL, UTF-8), ears.py, personality.py, main.py, faces/settings/characters/launcher (UTF-8)
+
+Protocolo, flujo de una respuesta y anti-eco: fase 0 (a) más abajo.
+
+### Hecho y probado de verdad
+
+| Bloque | Estado | Probado por mí | Probado por el usuario |
+| --- | --- | --- | --- |
+| F0 análisis | ✔ | — | — |
+| F1 cerebro en Windows | ✔ voz de reserva y UTF-8 arreglados | arranque, `say`, conversación con Haiku (Anthropic directo), herramientas | conversación por voz ✔ |
+| Español (`ROBOT_LANGUAGE=es`) | ✔ Whisper `small`, "oye Rocky", frases, voz por idioma | `ask` en español, 125+ tests en/es | por voz ✔ ("me entiende y responde bien") |
+| F2 ventana | ✔ 2:1 negra, rasgos blancos, redimensionable, recuerda posición | capturas | ✔ |
+| F3 conectada al cerebro | ✔ | e2e con cerebro real; arreglado speak_done | voz + boca sincronizada ✔ |
+| F4 bandeja/atajos/dormir/launcher | ✔ | e2e 15/15 con teclas reales; dashboard 8766 | pendiente: clics de menú, autoarranque |
+| F5 webcam | ✔ presencia, sonrisa, foto nítida, interruptor | e2e: describe la estantería; sin cámara dice que no ve | saludo y sonrisa sin probar |
+| Eco con altavoces | ✔ medido; 0,35 s sobra | medición VAD con micro webcam + altavoces USB | — |
+| Voz Fish `s2.1-pro-free` | ✔ gratis | síntesis y pregunta completa | "acento raro, vale para Rocky" |
+| Personajes (Rocky, Jarvis) | ✔ bandeja → Personaje | e2e Rocky→Jarvis→Rocky | eligió Jarvis |
+| Memoria paso 1 | ✔ remember/forget, fecha | e2e con reinicio del cerebro | sin probar por voz |
+
+### Pendiente, por prioridad acordada
+
+1. **Memoria paso 2: reconocer a la familia (3 personas y 3 gatas) y memoria por persona.** Plan:
+   - Personas: SFace de OpenCV Zoo (`face_recognition_sface_2021dec.onnx`, ~37 MB, Apache-2.0) sobre las caras de
+     YuNet que ya usa `tracker.py`; vector de 128, comparación coseno (umbral de referencia de SFace ≈ 0,363); varias
+     muestras por persona al darse de alta ("Rocky, recuerda mi cara, soy Raúl"). Descarga fijada con SHA-256 como
+     hace `perception.py`.
+   - Gatas: detector de objetos de MediaPipe (clase "cat") + huella visual (MediaPipe ImageEmbedder) comparada con
+     fotos de cada gata dadas de alta. Funciona si se distinguen por color/manchas; avisar si se parecen mucho.
+   - Nuevo `server/brain/identity.py`; datos en `server/identity/` (git-ignored; son biométricos, nunca salen del PC,
+     borrables con una orden). Enganchar en `perception.py` (quién está delante) y en la nota de cada pregunta
+     ("estás hablando con Raúl; Luna está en cámara").
+   - Memoria por persona: el campo `about` de `memory.py` ya existe; filtrar o marcar según quién habla.
+     Decisión del usuario: **puede contar lo que sabe de él salvo que diga explícitamente lo contrario** (`private`).
+   - Ojo: dormido, la percepción solo mira manos; el reconocimiento tendrá que ir despierto o con su propio ritmo.
+2. **Página para ver/editar/borrar recuerdos** (y altas de caras): en el panel de depuración o en el dashboard.
+3. **Fase 6: rediseño de la interfaz** (pedido): más resolución que los 128×64 escalados, estilo y animaciones
+   propios por personaje (p. ej. Jarvis como anillo HUD). `robot.handle(msg)` ya separa protocolo y dibujo.
+4. **Seguimiento de cara** (aplazado por el usuario; "de momento no hacemos nada con mírame/sígueme"). Riesgo
+   actual: "sígueme"/"mírame" activan el tracker y la cabeza virtual se va al tope (supone cámara en la cabeza).
+   Solución diseñada: cámara pan-tilt virtual (desplazar la imagen según la pose, fase 0 d).
+5. **Modo concentración**: sin decidir. Opciones: `OPENAI_API_KEY` (Decisions API, ~3 cts/25 min), cambiar
+   `decisions.py` por Haiku, o detector local de móvil (recomendado: gratis y sin mandar fotos fuera).
+6. Menores:
+   - Que la bandeja liste también personajes creados en el dashboard (`server/characters/`); hoy solo los paquetes.
+   - El dashboard no puede reiniciar el cerebro de la app (lo ve "externo"): cambiar personaje solo desde la bandeja.
+   - Distancia que dice la percepción: usa el FOV del robot (104°), no el de la webcam.
+   - Boca ~0,1 s adelantada con los altavoces USB (latencia real mayor que la declarada).
+   - Jarvis tardó 3,4 s en el primer audio en una prueba (Rocky ~2 s): vigilar.
+   - Voz local con clonación en la GPU (XTTS-v2 / Chatterbox) como alternativa a Fish, si algún día hace falta.
+   - `test_focus` es inestable también en el código original (2 de 8 fallos en HEAD): no es nuestro.
+
+### Lo que tiene que hacer el usuario (recordárselo)
+
+- Marcar **"Arrancar con Windows"** en la bandeja.
+- En "Ajustes y panel web" → Settings: **su nombre** (si no, el robot dice "friend" y la memoria escribe "mi
+  humano") y el **reloj en 24 h**.
+- Probar el **saludo con la mano** (con el robot dormido) y la sonrisa; clics del menú de la bandeja.
+- Para el paso 2 de memoria: que cada persona y cada gata se ponga delante de la webcam unos segundos.
+
+### Trampas conocidas (para no repetir)
+
+- Heredocs de bash con `python - <<'PYEOF'` y reemplazos que contienen `\b`, `\n` o `\\`: se corrompen. Para esos,
+  usar la herramienta Edit.
+- Un cerebro arrancado a mano y cerrado a medias deja el puerto 8767 ocupado ("Event loop is closed" en la API);
+  la app ahora lo avisa.
+- `Ctrl+Alt+M` y `Ctrl+Alt+R` los tiene otra aplicación del PC.
+- pywebview en Windows no hace fondo transparente; el tamaño de ventana sin marco se fija con `SetWindowPos`.
+- En `<svg>`, `.hidden` no es una propiedad: usar `toggleAttribute("hidden")`.
+- Los tests de idioma leen el `settings.json` real: ya no suponen que el personaje activo es Rocky.
+- La API de Fish va aparte de los planes de la web; `s2.1-pro-free` cuesta 0 (condiciones no documentadas).
+- Las preguntas por consola (`ask`) no despiertan al robot: en las capturas sale el reloj.
+
+---
+
 Basado en los ficheros del repo en `main` @ `68c98b9` (firmware 0.4.3, brain v2.1). Referencias como
 `fichero:línea`. Todo lo marcado **[hipótesis]** está deducido del código y no lo he ejecutado todavía.
 
