@@ -275,3 +275,39 @@ cerebro como hijo con stdin en pipe.
 4. **Commits**: tu CLAUDE.md dice no commitear sin confirmación explícita y el encargo pide commits pequeños.
    ¿Me autorizas a commitear en `feat/robot-virtual-windows` al cerrar cada paso de fase sin preguntar cada vez?
    (Nunca a `main`, nunca push.)
+
+---
+
+## FASE 1 — Cerebro en Windows con micro y altavoz del PC
+
+Entorno: Windows 11 Pro, Python 3.13.17 (winget, junto al 3.12 existente), venv en `server/.venv`.
+
+**Comprobado de verdad**
+
+- `pip install -r requirements.txt`: todas las versiones fijadas tienen wheel para cp313/win_amd64 (mediapipe 1.1.0,
+  onnxruntime 1.29.0, ctranslate2 4.9.0, opencv-contrib 5.0).
+- Tests del proyecto: 119/119 OK (`python -m unittest discover -s tests -p "test_*.py"`; en PowerShell el
+  `tests/test_*.py` del README no funciona porque no expande comodines).
+- Arranque completo sin robot con stdin/stdout en pipe: arranca en ~2 s una vez descargados los modelos, carga
+  MediaPipe, abre el micro por defecto (auriculares A50, MME), `say` sintetiza y reproduce sin errores, `quit`
+  cierra limpio.
+- Reproducción con `sounddevice` a 16 kHz con el `InputStream` del micro abierto: sin errores y con la duración
+  correcta (MME re-muestrea). No es necesario el truco de `afplay` del Mac.
+
+**Problemas y arreglos (commits en la rama)**
+
+1. Voz de reserva: `powershell -Command <script> <ruta>` pega los argumentos al script, `$args[0]` llegaba vacío y
+   `SetOutputToWaveFile` fallaba ("'path' no puede ser una cadena vacía"). Ahora la ruta va en
+   `DESK_ROBOT_TTS_OUT`, stdin en UTF-8, `$ErrorActionPreference='Stop'` y sin ventana de consola.
+2. Codificación: `.env`, `settings.json`, packs, personajes, el `.txt` de depuración y el `dashboard.html` se leían
+   o escribían con cp1252. Ahora UTF-8 explícito (`utf-8-sig` para `.env`, por si Notepad le pone BOM).
+3. Salida del cerebro por pipe: sin `PYTHONIOENCODING` sale en cp1252 y "—" llega como basura al lector UTF-8 (no
+   se cae, porque esos caracteres existen en cp1252). El launcher ahora fija `PYTHONIOENCODING=utf-8` y lee en
+   UTF-8. Cualquier proceso nuestro que lance el cerebro debe hacer lo mismo.
+
+**No probado todavía**
+
+- Conversación real (falta `LLM_API_KEY` en `server/.env`), voz de Fish Audio (`FISH_AUDIO_API_KEY`).
+- Palabra de activación y transcripción con tu voz (requiere que hables tú).
+- Que el audio se oiga bien: yo no puedo oírlo; la duración de la reproducción cuadra.
+- El launcher (`launcher.py`, dashboard en :8766) en Windows.
