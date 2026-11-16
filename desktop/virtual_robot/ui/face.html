@@ -5,60 +5,43 @@
 <title>Robot virtual</title>
 <style>
   :root {
-    --shell: #1b1612;        /* la carcasa de la cabeza */
-    --shell-edge: #2b231d;
-    --bezel: #050505;        /* el marco negro de la pantalla */
-    --amber: #f2b45c;        /* los píxeles encendidos del OLED (como en el dashboard) */
-    --off: #0a0d14;          /* los apagados */
+    --on: #ffffff;           /* píxeles encendidos */
+    --off: #000000;          /* fondo de la pantalla */
   }
-  html, body { margin: 0; height: 100%; overflow: hidden; background: var(--shell); user-select: none; }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: var(--off); user-select: none; }
   body { font-family: "Cascadia Mono", Consolas, monospace; }
-  /* Toda la ventana es la cabeza: se arrastra desde cualquier punto menos el asa de tamaño. */
-  #head {
-    position: absolute; inset: 0; display: grid; place-items: center;
-    background: radial-gradient(120% 90% at 50% 30%, var(--shell-edge), var(--shell) 70%);
-    perspective: 600px;
-  }
-  /* La placa de la cara gira con el cuello simulado (pan = rotateY, tilt = rotateX). */
-  #plate {
-    width: 82%; aspect-ratio: 2 / 1; position: relative; transform-style: preserve-3d;
-    will-change: transform;
-  }
-  #bezel {
-    position: absolute; inset: 0; border-radius: 6%; background: var(--bezel); padding: 4%;
-    box-sizing: border-box; box-shadow: 0 0.6vmin 2.2vmin rgba(0, 0, 0, .55), inset 0 0 0 0.4vmin #111;
-  }
+  /* La ventana es la pantalla del robot (128x64, 2:1). Se arrastra desde cualquier punto menos el asa. */
+  #screen { position: absolute; inset: 0; perspective: 500px; overflow: hidden; }
+  /* La cara se desplaza y gira con el cuello simulado: sin carcasa, el giro de la cabeza se ve en la pantalla. */
+  #plate { position: absolute; inset: 0; transform-style: preserve-3d; will-change: transform; }
   canvas, #clock { width: 100%; height: 100%; display: block; }
-  canvas { image-rendering: pixelated; border-radius: 2%; }
+  canvas { image-rendering: pixelated; }
   #clock {
-    display: none; color: var(--amber); background: var(--off); border-radius: 2%; box-sizing: border-box;
-    flex-direction: column; justify-content: center; align-items: center; line-height: 1;
+    display: none; color: var(--on); flex-direction: column; justify-content: center; align-items: center;
+    line-height: 1;
   }
-  #clock .time { font-size: 17vmin; letter-spacing: .04em; }
-  #clock .date { font-size: 5vmin; opacity: .8; margin-top: 3vmin; }
+  #clock .time { font-size: 34vh; letter-spacing: .04em; }
+  #clock .date { font-size: 10vh; opacity: .75; margin-top: 5vh; }
   body.clock #clock { display: flex; }
   body.clock canvas { display: none; }
   /* Asa para cambiar el tamaño (la ventana no tiene bordes). */
   #grip {
-    position: absolute; right: 0; bottom: 0; width: 18px; height: 18px; cursor: nwse-resize; opacity: .35;
-    background: linear-gradient(135deg, transparent 50%, var(--amber) 50% 58%, transparent 58% 70%,
-                var(--amber) 70% 78%, transparent 78%);
+    position: absolute; right: 0; bottom: 0; width: 16px; height: 16px; cursor: nwse-resize; opacity: 0;
+    background: linear-gradient(135deg, transparent 50%, var(--on) 50% 58%, transparent 58% 70%,
+                var(--on) 70% 78%, transparent 78%);
+    transition: opacity .2s;
   }
-  #grip:hover { opacity: .9; }
-  /* Indicadores de micro/cámara apagados (fase 4); ocultos de momento. */
-  #status { position: absolute; left: 6px; top: 4px; font-size: 11px; color: var(--amber); opacity: .7; }
+  body:hover #grip { opacity: .35; }
+  #grip:hover { opacity: .9 !important; }
 </style>
 </head>
 <body>
-<div id="head" class="pywebview-drag-region">
+<div id="screen" class="pywebview-drag-region">
   <div id="plate" class="pywebview-drag-region">
-    <div id="bezel" class="pywebview-drag-region">
-      <canvas id="face" width="128" height="64" class="pywebview-drag-region"></canvas>
-      <div id="clock" class="pywebview-drag-region"><div class="time">--:--</div><div class="date"></div></div>
-    </div>
+    <canvas id="face" width="128" height="64" class="pywebview-drag-region"></canvas>
+    <div id="clock" class="pywebview-drag-region"><div class="time">--:--</div><div class="date"></div></div>
   </div>
 </div>
-<div id="status"></div>
 <div id="grip" title="Arrastra para cambiar el tamaño"></div>
 <script src="facekit.js"></script>
 <script src="robot.js"></script>

@@ -356,8 +356,10 @@ Arranque (desde `desktop/`, con el venv del cerebro):
 - `ui/robot.js`: `robot.handle(msg)` acepta los mensajes del protocolo (`emotion`, `pan`, `tilt`, `motion`,
   `asleep`, `face`, `mouth`, `settings`…). Cuello con el mismo perfil de velocidad/aceleración que los servos;
   boca con el nivel RMS y caducidad de 300 ms como el firmware; dormido: cara de sueño 5 s y luego reloj.
-- `app.py`: ventana sin bordes, siempre encima, cuadrada, arrastrable desde cualquier punto y redimensionable desde
-  el asa de la esquina (120-900 px). Posición y tamaño en `%APPDATA%\desk-robot-virtual\config.json`; si la
+- `app.py`: ventana sin bordes, siempre encima, arrastrable desde cualquier punto y redimensionable desde el asa
+  de la esquina (160-1400 px de ancho). **La ventana es solo la pantalla**: negra, 2:1 como el OLED de 128×64,
+  rasgos en blanco (pintados con nuestros colores en `robot.js`; FaceKit sigue sin tocar). Sin carcasa, el giro de
+  cabeza se ve como la cara desplazándose y girando en perspectiva dentro de la pantalla. Posición y tamaño en `%APPDATA%\desk-robot-virtual\config.json`; si la
   posición guardada no cabe entera en ningún monitor, vuelve abajo a la derecha del principal.
 - Panel de depuración (`--debug`): las 12 emociones, dormir/despertar, hablar simulado, recorrer caras, pan/tilt,
   movimientos (centro, mirar a los lados, asentir, negar, bailar) y selector de pack.
@@ -365,8 +367,8 @@ Arranque (desde `desktop/`, con el venv del cerebro):
 **Decisiones / hallazgos**
 
 - **Sin fondo transparente**: pywebview 6.2.1 + WebView2 157 en Windows pinta un fondo opaco aunque se pida
-  `transparent=True` (probado con captura). En su lugar la ventana es la "cabeza" y tiene las esquinas redondeadas
-  nativas de Windows 11 (DWM).
+  `transparent=True` (probado con captura). En su lugar la ventana es la pantalla negra, con las esquinas
+  redondeadas nativas de Windows 11 (DWM).
 - pywebview descuenta un borde (16×39 px) que una ventana sin marco no tiene: el tamaño y la posición se fijan con
   `SetWindowPos` directamente.
 

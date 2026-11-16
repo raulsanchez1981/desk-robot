@@ -32,14 +32,14 @@ WORK = (0, 0, 5120, 1400)
 class PlaceTest(unittest.TestCase):
     def test_first_run_goes_bottom_right(self):
         self.assertEqual(settings.place(settings.WindowState(), MONITORS, WORK),
-                         (5120 - 240 - settings.MARGIN, 1400 - 240 - settings.MARGIN, 240))
+                         (5120 - 320 - settings.MARGIN, 1400 - 160 - settings.MARGIN, 320))
 
     def test_saved_position_on_second_monitor(self):
         self.assertEqual(settings.place(settings.WindowState(2000, 1600, 300), MONITORS, WORK), (2000, 1600, 300))
 
     def test_off_screen_position_resets(self):
         x, y, size = settings.place(settings.WindowState(9000, 9000, 300), MONITORS, WORK)
-        self.assertEqual((x, y), (5120 - 300 - settings.MARGIN, 1400 - 300 - settings.MARGIN))
+        self.assertEqual((x, y), (5120 - 300 - settings.MARGIN, 1400 - 150 - settings.MARGIN))
 
     def test_straddling_monitors_resets(self):
         x, _, _ = settings.place(settings.WindowState(5000, 100, 300), MONITORS, WORK)

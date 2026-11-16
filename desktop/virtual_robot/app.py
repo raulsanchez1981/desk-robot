@@ -1,4 +1,4 @@
-"""Ventanas del robot virtual: la cara (pequeña, cuadrada, sin bordes, siempre encima) y el panel de depuración.
+"""Ventanas del robot virtual: la cara (la pantalla del robot, 2:1, sin bordes, siempre encima) y el panel de depuración.
 
 La cara se controla con mensajes con forma de protocolo (robot.handle(msg) en ui/robot.js). En la fase 2 los manda
 el panel de depuración; en la fase 3 los mandará el enlace con el cerebro.
@@ -51,8 +51,9 @@ class FaceWindow:
         self._place = (x, y)
         self.window = webview.create_window(
             FACE_TITLE, url=str(UI / "face.html"), js_api=_FaceApi(self, faces),
-            width=size, height=size, x=x, y=y, frameless=True, easy_drag=False, on_top=True,
-            resizable=False, background_color="#1b1612", min_size=(settings.MIN_SIZE, settings.MIN_SIZE))
+            width=size, height=settings.height_for(size), x=x, y=y, frameless=True, easy_drag=False, on_top=True,
+            resizable=False, background_color="#000000",
+            min_size=(settings.MIN_SIZE, settings.height_for(settings.MIN_SIZE)))
         self.window.events.shown += self._on_shown
 
     def _on_shown(self) -> None:
@@ -63,13 +64,13 @@ class FaceWindow:
             time.sleep(0.05)
         win32.round_corners(self.hwnd)
         x, y = self._place
-        win32.set_window_rect(self.hwnd, x, y, self.size, self.size)   # tamaño exacto (ver win32.set_window_rect)
+        win32.set_window_rect(self.hwnd, x, y, self.size, settings.height_for(self.size))   # exacto (ver win32)
         self.ready.set()
         threading.Thread(target=self._remember_position, daemon=True).start()
 
     def resize(self, size: int, final: bool) -> int:
         size = max(settings.MIN_SIZE, min(settings.MAX_SIZE, int(size)))
-        win32.set_window_rect(self.hwnd, None, None, size, size)
+        win32.set_window_rect(self.hwnd, None, None, size, settings.height_for(size))
         self.size = size
         return size
 
@@ -83,7 +84,7 @@ class FaceWindow:
             x, y, w, h = win32.window_rect(self.hwnd)
             if w <= 0:
                 continue
-            now = (x, y, max(w, h))
+            now = (x, y, w)
             if now != last:
                 last = now
                 self.state.x, self.state.y, self.state.size = now

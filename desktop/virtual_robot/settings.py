@@ -11,7 +11,7 @@ import tempfile
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
-MIN_SIZE, MAX_SIZE, DEFAULT_SIZE = 120, 900, 240
+MIN_SIZE, MAX_SIZE, DEFAULT_SIZE = 160, 1400, 320   # ancho; el alto es la mitad (2:1)
 MARGIN = 24   # separación de la esquina de la pantalla en la primera ejecución
 
 
@@ -24,10 +24,14 @@ def config_dir() -> Path:
 class WindowState:
     x: int | None = None
     y: int | None = None
-    size: int = DEFAULT_SIZE
+    size: int = DEFAULT_SIZE      # ancho de la ventana; el alto es size // 2, como la pantalla de 128x64
 
     def clamped_size(self) -> int:
         return max(MIN_SIZE, min(MAX_SIZE, int(self.size)))
+
+
+def height_for(width: int) -> int:
+    return width // 2
 
 
 def load(path: Path | None = None) -> WindowState:
@@ -60,13 +64,14 @@ def save(state: WindowState, path: Path | None = None) -> None:
 
 def place(state: WindowState, monitors: list[tuple[int, int, int, int]],
           work_area: tuple[int, int, int, int]) -> tuple[int, int, int]:
-    """(x, y, tamaño) donde abrir la ventana: la posición guardada si sigue viéndose entera en algún monitor
+    """(x, y, ancho) donde abrir la ventana: la posición guardada si sigue viéndose entera en algún monitor
     (rectángulos left, top, right, bottom); si no (primera vez, monitor desconectado), abajo a la derecha del área
     de trabajo del monitor principal."""
     size = state.clamped_size()
+    height = height_for(size)
     if state.x is not None and state.y is not None:
         for left, top, right, bottom in monitors:
-            if left <= state.x and top <= state.y and state.x + size <= right and state.y + size <= bottom:
+            if left <= state.x and top <= state.y and state.x + size <= right and state.y + height <= bottom:
                 return state.x, state.y, size
     left, top, right, bottom = work_area
-    return right - size - MARGIN, bottom - size - MARGIN, size
+    return right - size - MARGIN, bottom - height - MARGIN, size

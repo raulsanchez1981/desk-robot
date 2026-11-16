@@ -37,6 +37,19 @@ const MOUTH_TIMEOUT_MS = 300;                                        // nivel de
 const FRAME_MS = 33;                                                 // 30 fps, como face.cpp
 
 const clamp = (x, lo, hi) => Math.min(hi, Math.max(lo, x));
+const ON = [255, 255, 255], OFF = [0, 0, 0];                         // blanco sobre negro (face.html --on/--off)
+
+// Como FaceKit.paint, pero con nuestros colores.
+function paint(canvas, buf) {
+  const ctx = canvas._ctx || (canvas._ctx = canvas.getContext("2d"));
+  const img = canvas._img || (canvas._img = ctx.createImageData(FaceKit.W, FaceKit.H));
+  const d = img.data;
+  for (let i = 0; i < buf.length; ++i) {
+    const c = buf[i] ? ON : OFF, o = i * 4;
+    d[o] = c[0]; d[o + 1] = c[1]; d[o + 2] = c[2]; d[o + 3] = 255;
+  }
+  ctx.putImageData(img, 0, 0);
+}
 const $ = id => document.getElementById(id);
 
 const robot = {
@@ -110,13 +123,13 @@ const robot = {
     this.sim.talking = talking;
     this.sim.mouthLevel = talking ? this.mouthLevel : 0;
     this.sim.step(now);
-    FaceKit.paint($("face"), this.sim.render(now));
+    paint($("face"), this.sim.render(now));
     if (this.asleep && now - this.asleepAt >= SLEEP_FACE_MS) document.body.classList.add("clock");
     const pan = this.neck.pan.advance(now / 1000), tilt = this.neck.tilt.advance(now / 1000);
     // pan + = derecha del robot = tu izquierda mirándole; tilt + = arriba.
     const px = -pan / LIMITS.pan[1], ty = tilt / LIMITS.tilt[1];
     $("plate").style.transform =
-      `translateX(${px * 14}%) translateY(${-ty * 16}%) rotateY(${-pan * 0.45}deg) rotateX(${tilt * 0.45}deg)`;
+      `translateX(${px * 15}%) translateY(${-ty * 14}%) rotateY(${-pan * 0.35}deg) rotateX(${tilt * 0.35}deg)`;
   },
 
   tickClock() {
@@ -137,18 +150,18 @@ function waitForApi() {
   });
 }
 
-// Redimensionar desde el asa: siempre cuadrada; Python mueve la ventana de verdad.
+// Redimensionar desde el asa: siempre 2:1 como la pantalla del robot; Python mueve la ventana de verdad.
 function setupGrip() {
   const grip = $("grip");
   let start = null, pending = null, busy = false;
   grip.addEventListener("pointerdown", e => {
     e.preventDefault(); e.stopPropagation();
     grip.setPointerCapture(e.pointerId);
-    start = { x: e.screenX, y: e.screenY, size: Math.max(window.innerWidth, window.innerHeight) };
+    start = { x: e.screenX, y: e.screenY, size: window.innerWidth };
   });
   grip.addEventListener("pointermove", e => {
     if (!start) return;
-    pending = Math.round(start.size + Math.max(e.screenX - start.x, e.screenY - start.y));
+    pending = Math.round(start.size + Math.max(e.screenX - start.x, 2 * (e.screenY - start.y)));   // 2:1
     if (!busy) flush();
   });
   const end = e => { if (start) { start = null; if (pending) flush(true); } };
