@@ -311,3 +311,27 @@ TRACK_TILT_SPEED, TRACK_TILT_ACCEL = 160.0, 600.0   # = TILT_MAX_SPEED, TILT_ACC
 
 # How many conversation turns to remember before forgetting the oldest.
 MAX_HISTORY_TURNS = 20
+
+# ── Idioma (brain/language.py) ───────────────────────────────────────────────────────────────────────────────────
+# ROBOT_LANGUAGE en server/.env: "en" (por defecto, el original) o "es". En español cambia el reconocimiento de voz
+# (modelo multilingüe), la palabra de activación ("oye Rocky"), las frases que se entienden sin preguntar al modelo,
+# la voz de reserva de Windows y la personalidad (contesta en español).
+from . import language as _language  # noqa: E402
+
+LANGUAGE = (os.environ.get("ROBOT_LANGUAGE") or "en").strip().lower()
+if LANGUAGE not in _language.SUPPORTED:
+    print(f"(ROBOT_LANGUAGE={LANGUAGE!r} no está soportado: {', '.join(_language.SUPPORTED)}; uso en)")
+    LANGUAGE = "en"
+STT_LANGUAGE = LANGUAGE
+TTS_CULTURE = "en-US"
+if LANGUAGE == "es":
+    STT_MODEL, STT_REVISION = _language.ES_STT_MODEL, _language.ES_STT_REVISION
+    STT_PROMPT = f"Oye {ROBOT_NAME}. {ROBOT_NAME} es un robot."
+    TTS_CULTURE = _language.ES_TTS_CULTURE
+    # Las frases en español se suman a las inglesas (menos "a rocky", que en español sale en frases normales).
+    WAKE_PHRASES = _language.es_wake_phrases(ROBOT_NAME) + [p for p in WAKE_PHRASES if not p.startswith("a ")]
+    SLEEP_PHRASES = _language.es_sleep_phrases(ROBOT_NAME) + SLEEP_PHRASES
+    TRACK_ON_PHRASES = _language.ES_TRACK_ON + TRACK_ON_PHRASES
+    TRACK_OFF_PHRASES = _language.ES_TRACK_OFF + TRACK_OFF_PHRASES
+    FOCUS_STOP_PHRASES = _language.ES_FOCUS_STOP + FOCUS_STOP_PHRASES
+    CAMERA_WORDS = _language.ES_CAMERA_WORDS + CAMERA_WORDS

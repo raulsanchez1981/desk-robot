@@ -27,6 +27,7 @@ from collections.abc import Callable
 import numpy as np
 
 from . import config
+from .language import fold
 from .turn import VAD_CHUNK, SileroVAD, SmartTurn
 
 SAMPLE_RATE = 16_000
@@ -222,7 +223,7 @@ class Transcriber:
     def transcribe(self, audio: np.ndarray) -> str:
         segments, _ = self.model.transcribe(
             audio,
-            language="en",
+            language=config.STT_LANGUAGE,
             beam_size=1,
             vad_filter=True,
             # Tells the model the name to expect; without this "Rocky" comes
@@ -236,7 +237,8 @@ _WAKE_CLEAN = re.compile(r"[^a-z' ]+")
 
 
 def normalize(text: str) -> str:
-    return " ".join(_WAKE_CLEAN.sub(" ", text.lower()).split())
+    # sin tildes antes de limpiar: "adiós" -> "adios", no "adi s"
+    return " ".join(_WAKE_CLEAN.sub(" ", fold(text)).split())
 
 
 def _wake_pattern() -> re.Pattern:

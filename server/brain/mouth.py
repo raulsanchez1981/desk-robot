@@ -432,6 +432,7 @@ $ErrorActionPreference = 'Stop'
 Add-Type -AssemblyName System.Speech
 $fmt = New-Object System.Speech.AudioFormat.SpeechAudioFormatInfo(16000, [System.Speech.AudioFormat.AudioBitsPerSample]::Sixteen, [System.Speech.AudioFormat.AudioChannel]::Mono)
 $s = New-Object System.Speech.Synthesis.SpeechSynthesizer
+try { $s.SelectVoiceByHints('NotSet', 'NotSet', 0, [System.Globalization.CultureInfo]$env:DESK_ROBOT_TTS_CULTURE) } catch {}
 $s.SetOutputToWaveFile($env:DESK_ROBOT_TTS_OUT, $fmt)
 $s.Speak([Console]::In.ReadToEnd())
 $s.Dispose()
@@ -450,7 +451,7 @@ def _synthesize_builtin(text: str) -> bytes:
             cmd = ["say", "-v", config.TTS_FALLBACK_VOICE, "-o", path, "--data-format=LEI16@16000"]
         elif sys.platform == "win32":
             cmd = ["powershell", "-NoProfile", "-NonInteractive", "-Command", _WINDOWS_TTS]
-            env = {**os.environ, "DESK_ROBOT_TTS_OUT": path}
+            env = {**os.environ, "DESK_ROBOT_TTS_OUT": path, "DESK_ROBOT_TTS_CULTURE": config.TTS_CULTURE}
         elif shutil.which("espeak-ng") or shutil.which("espeak"):
             cmd = [shutil.which("espeak-ng") or "espeak", "--stdin", "-w", path]
         else:

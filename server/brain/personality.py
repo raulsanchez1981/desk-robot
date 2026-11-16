@@ -178,3 +178,9 @@ ROCKY_PROMPT, ROCKY_LINES = SYSTEM_PROMPT, LINES   # his own, whoever is active 
 if config.CHARACTER:
     SYSTEM_PROMPT = _character_prompt(config.CHARACTER)
     LINES = {k: v.replace("{human}", config.HUMAN_NAME) for k, v in config.CHARACTER["lines"].items()}
+if config.LANGUAGE == "es":   # brain/language.py: contesta en español (y Rocky, con sus muletillas en español)
+    from . import language as _language
+    SYSTEM_PROMPT += _language.ES_REPLY_RULES
+    if not config.CHARACTER:
+        SYSTEM_PROMPT += _language.ES_ROCKY_RULES.replace("{human}", config.HUMAN_NAME)
+        LINES = {k: v.replace("{human}", config.HUMAN_NAME) for k, v in _language.ES_ROCKY_LINES.items()}
