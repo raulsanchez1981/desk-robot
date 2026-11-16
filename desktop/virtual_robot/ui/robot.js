@@ -104,8 +104,9 @@ const robot = {
         this.mouthAt = performance.now();
         break;
       case "_indicators":                                            // interruptores del usuario (no es del protocolo)
-        $("mic-off").hidden = msg.mic !== false;
-        $("cam-off").hidden = msg.cam !== false;
+        // en <svg> .hidden no existe (solo en elementos HTML): hay que tocar el atributo
+        $("mic-off").toggleAttribute("hidden", msg.mic !== false);
+        $("cam-off").toggleAttribute("hidden", msg.cam !== false);
         break;
       case "settings":
         if (typeof msg.h24 === "boolean") this.h24 = msg.h24;
