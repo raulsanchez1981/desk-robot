@@ -19,6 +19,7 @@ from pathlib import Path
 import websockets
 
 from .audio import Mic, Speaker
+from .camera import Camera
 
 FW = "virtual-0.1.0"
 RETRY_S = 3.0
@@ -45,8 +46,8 @@ class BrainLink:
     def __init__(self, to_face: Callable[[dict], None], url: str = "ws://127.0.0.1:8765") -> None:
         self.to_face, self.url = to_face, url
         self.connected = False
-        self.camera_enabled = True   # interruptor del usuario; la webcam llega en la fase 5
         self._stopping = False
+        self.asleep = True           # lo último que dijo el cerebro (la cámara va a 5 fps dormido, como la placa)
         self.status = "arrancando"
         self.pan, self.emotion = 0.0, "neutral"
         self._loop: asyncio.AbstractEventLoop | None = None
@@ -54,6 +55,15 @@ class BrainLink:
         self._outbox: asyncio.Queue | None = None
         self.speaker = Speaker(on_done=self._send_json_threadsafe, on_mouth=self._mouth)
         self.mic = Mic(on_frame=self._send_mic_threadsafe, speaker=self.speaker)
+        self.camera = Camera(send=self._enqueue, speaking=lambda: self.speaker.speaking, asleep=lambda: self.asleep)
+
+    @property
+    def camera_enabled(self) -> bool:
+        return self.camera.enabled
+
+    @camera_enabled.setter
+    def camera_enabled(self, on: bool) -> None:
+        self.camera.set_enabled(on)
 
     # ── arranque ────────────────────────────────────────────────────────────────────────────────────────────────
     def start(self) -> None:
@@ -62,6 +72,7 @@ class BrainLink:
     def stop(self) -> None:
         """Cierra la conexión y el audio (al salir de la app)."""
         self._stopping = True
+        self.camera.set_enabled(False)
         if self._loop is not None and self._ws is not None:
             try:
                 asyncio.run_coroutine_threadsafe(self._ws.close(), self._loop).result(timeout=2)
@@ -101,6 +112,7 @@ class BrainLink:
                     self._ws, self.connected, warned = ws, True, False
                     self.status = "conectado"
                     print("robot virtual: conectado al cerebro")
+                    threading.Thread(target=self._upright_camera, daemon=True).start()
                     tasks = [asyncio.create_task(c) for c in (self._receive(ws), self._send(ws), self._heartbeat(ws))]
                     done, pending = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
                     for t in pending:
@@ -119,6 +131,7 @@ class BrainLink:
                 self._ws, self.connected = None, False
                 self.status = "sin cerebro"
                 self.mic.wanted = False
+                self.camera.set_stream(False)
                 self.to_face({"type": "asleep", "on": True})   # como la placa sin cerebro: a dormir
             await asyncio.sleep(RETRY_S)
 
@@ -146,9 +159,13 @@ class BrainLink:
             self.mic.wanted = bool(msg.get("on"))
         elif kind == "volume" and isinstance(msg.get("level"), (int, float)):
             self.speaker.volume = max(0.0, min(1.0, float(msg["level"])))
-        elif kind in ("stream", "snapshot"):
-            pass   # la webcam llega en la fase 5
+        elif kind == "stream":
+            self.camera.set_stream(bool(msg.get("on")), msg.get("fps"), msg.get("size"))
+        elif kind == "snapshot":
+            self.camera.snapshot(msg.get("size"))
         else:
+            if kind == "asleep":
+                self.asleep = bool(msg.get("on"))
             if kind == "emotion":
                 self.emotion = msg.get("name", self.emotion)
             elif kind == "pan" and isinstance(msg.get("deg"), (int, float)):
@@ -175,6 +192,20 @@ class BrainLink:
     def _enqueue(self, item) -> None:
         if self.connected and self._loop is not None:
             self._loop.call_soon_threadsafe(self._outbox.put_nowait, item)
+
+    def _upright_camera(self) -> None:
+        """El cerebro gira cada imagen CAMERA_ROTATE grados (270 para la cámara de lado del robot V2); la webcam
+        ya viene derecha. Se pone a 0 por su API (queda guardado en server/settings.json)."""
+        from . import brain_process
+        for _ in range(20):                  # la API (8767) puede tardar un poco más que el WebSocket
+            try:
+                rotate = brain_process.status().get("camera_rotate")
+                if rotate not in (0, None):
+                    brain_process.api("camera_rotate", {"deg": 0})
+                    print(f"robot virtual: giro de cámara del cerebro {rotate}° -> 0° (la webcam ya viene derecha)")
+                return
+            except OSError:
+                time.sleep(1)
 
     def _mouth(self, level: float) -> None:
         self.to_face({"type": "mouth", "level": round(level, 3)})

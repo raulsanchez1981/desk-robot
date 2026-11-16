@@ -136,6 +136,7 @@ async function start() {
     if (!s) return;
     $("state").textContent =
       `cerebro  ${s.link}\nmicro    ${s.mic ? "escuchando" : "cortado"}\nvoz      ${s.speaking ? "sonando" : "-"}\n` +
+      `cámara   ${s.camera}\nve       ${s.seen}\n` +
       `emoción  ${s.emotion}\ndormido  ${s.asleep ? "sí" : "no"}\nboca     ${s.talking ? "moviéndose" : "-"}\n` +
       `pan      ${s.pan.toFixed(1)}°\ntilt     ${s.tilt.toFixed(1)}°`;
     document.querySelectorAll("[data-emotion]").forEach(b => b.classList.toggle("on", b.dataset.emotion === s.emotion));

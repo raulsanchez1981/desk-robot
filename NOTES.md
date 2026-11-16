@@ -463,3 +463,47 @@ una terminal se quedó a medio cerrar con el puerto 8767 ocupado, así que las �
 app; ahora lo detecta y avisa.
 
 **No probado por mí**: clics en el menú de la bandeja con el ratón, el arranque real al iniciar sesión.
+
+---
+
+## FASE 5 — Webcam (presencia, sonrisa, saludo, ver)
+
+**Cómo está hecho** (`virtual_robot/camera.py`, enganchado en `link.py`)
+
+- La webcam responde a lo que el cerebro ya pide a la placa: `stream {on, fps, size}` → frames `0x02`;
+  `snapshot {size}` → un `0x03`. Sin cambios en `server/`.
+- Captura a 1280×720 por DirectShow (esta Logitech StreamCam da 10 fps ahí; 30 fps a 640×480). Stream reducido a
+  640 px de ancho (320 en `qvga`), 8 fps mientras habla y 5 dormido como el firmware; la foto nítida es el frame
+  entero (1024 px para `xga`), sin reabrir la cámara.
+- Orientación: cada imagen va espejada porque el cerebro espeja (`CAMERA_MIRROR`, fijo en `config.py`, pensado para
+  el sensor del robot); y al conectar se pone `camera_rotate` a 0 por la API (era 270 por la cámara de lado del V2).
+  **Queda guardado en `server/settings.json`**: si se monta el robot físico, volver a 270 en el dashboard.
+- Elección de cámara: la primera que no dé imagen negra. En este PC el índice 0 es una cámara virtual negra (61 fps
+  de negro) y la real es la 1. Se puede fijar con `"camera_index"` en `%APPDATA%\desk-robot-virtual\config.json`.
+- La webcam solo está abierta mientras el cerebro pide imagen y el interruptor está encendido; con la cámara
+  apagada (Ctrl+Alt+C o bandeja) se libera y se apaga su luz. Ojo: como la placa, mientras el cerebro está
+  conectado pide imagen siempre, también dormido (5 fps, para ver un saludo).
+- Panel de depuración: estado de la cámara y lo que nota el cerebro ("1 persona(s) · te mira · sonríe · saludo").
+
+**Qué detecta y qué hace con ello** (todo del cerebro original)
+
+- Presencia, mirada, sonrisa, ojos cerrados: MediaPipe face landmarker. Se usa en la nota que acompaña a las
+  preguntas visuales y en el panel; con cada pregunta va además la foto de contexto, así que "sabe si estás".
+  **Dormido solo vigila las manos**: la presencia se ve con Rocky despierto.
+- Saludo con la mano: lo despierta (dice su línea `wake`).
+- Preguntas visuales ("¿qué ves?", "mira esto"): foto nítida.
+- Distancia aproximada: usa el campo de visión del objetivo del robot (104°), no el de la webcam (~70°), así que
+  los metros que dice son orientativos.
+
+**Probado de verdad** (con tu webcam): conexión, giro 270→0, el cerebro recibe imagen; despierto detecta 1 persona
+que le mira; "¿qué ves?" → describe la estantería y las figuras con la foto nítida; cámara apagada → webcam liberada
+y "No puedo ver nada ahora mismo, cámara no da imagen"; al encenderla vuelve. Frame orientado bien. 26 tests.
+
+**No probado por mí**: el saludo para despertarle (necesita que saludes), la sonrisa en vivo.
+
+**Pendiente**
+
+- Seguimiento de cara (aplazado): con la webcam fija, "sígueme" o **"mírame"** encienden el seguimiento y la cabeza
+  virtual se iría al tope (el tracker supone cámara en la cabeza). Solución prevista: cámara pan-tilt virtual
+  (fase 0, punto d).
+- Modo concentración: necesita `OPENAI_API_KEY` (Decisions API) o cambiarlo por Haiku / detector local.

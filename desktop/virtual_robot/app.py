@@ -146,6 +146,7 @@ class _DebugApi:
 
     def __init__(self, face: FaceWindow, faces, link=None) -> None:
         self._face, self._faces, self._link = face, faces, link
+        self._seen, self._seen_at = None, 0.0
 
     def info(self) -> dict:
         packs = [{"id": p["id"], "name": p.get("pack", {}).get("name", p["id"])}
@@ -170,7 +171,30 @@ class _DebugApi:
             s["speaking"] = bool(self._link and self._link.speaker.speaking)
             s["mic"] = bool(self._link and self._link.mic.wanted and self._link.mic.enabled
                             and not self._link.speaker.speaking)
+            s["camera"] = self._link.camera.status if self._link is not None else "-"
+            s["seen"] = self._what_the_brain_sees()
         return s
+
+    def _what_the_brain_sees(self) -> str:
+        """Lo que la percepción del cerebro nota en la webcam (su /status), como mucho una vez por segundo."""
+        if self._link is None or not self._link.connected:
+            return "-"
+        if time.time() - self._seen_at > 1.0:
+            self._seen_at = time.time()
+            try:
+                n = brain_process.status(timeout=0.5).get("notices") or {}
+            except OSError:
+                n = {}
+            if not n.get("live"):
+                self._seen = "nada (sin imagen o percepción apagada)"
+            elif not n.get("people"):
+                self._seen = "nadie" + (" · saludo" if n.get("waving") else "")
+            else:
+                f = n.get("face") or {}
+                bits = [f"{n['people']} persona(s)"] + [w for k, w in (("smiling", "sonríe"), ("looking", "te mira"),
+                                                                      ("eyes_closed", "ojos cerrados")) if f.get(k)]
+                self._seen = " · ".join(bits + (["saludo"] if n.get("waving") else []))
+        return self._seen
 
 
 class Controller:
