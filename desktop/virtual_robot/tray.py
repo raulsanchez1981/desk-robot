@@ -42,7 +42,7 @@ class Tray:
                 for p in app.characters()])),
             pystray.Menu.SEPARATOR,
             item("Panel de depuración", self._do(app.open_debug)),
-            item("Panel web del cerebro", self._do(app.open_web)),
+            item("Ajustes y panel web", self._do(app.open_web)),
             item("Reiniciar el cerebro", self._do(app.restart_brain)),
             item("Arrancar con Windows", self._do(app.toggle_autostart), checked=lambda _: app.autostart),
             pystray.Menu.SEPARATOR,

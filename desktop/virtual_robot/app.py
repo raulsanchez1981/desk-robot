@@ -211,6 +211,7 @@ class Controller:
         self.face = FaceWindow(settings.load(), start_asleep=brain, tool_window=True)
         self.face.window.events.closing += self._on_closing
         self.brain = brain_process.BrainProcess() if brain else None
+        self.launcher = brain_process.LauncherProcess() if brain else None
         self.link = None
         if brain:
             from .link import BrainLink
@@ -232,6 +233,11 @@ class Controller:
             print(f"robot virtual: {self.brain.start()}")
             if self.brain.warning:
                 print(f"robot virtual: {self.brain.warning}")
+        if self.launcher is not None:
+            try:
+                print(f"robot virtual: {self.launcher.start()}")
+            except OSError as e:
+                print(f"robot virtual: no pude abrir el panel de ajustes ({e})")
         if self.link is not None:
             self.link.start()
         self.tray = Tray(self)
@@ -268,6 +274,8 @@ class Controller:
             self.link.stop()
         if self.brain is not None:
             self.brain.stop()
+        if self.launcher is not None:
+            self.launcher.stop()
         if self.tray is not None:
             self.tray.stop()
         for w in (self.debug_window, self.face.window):
@@ -347,7 +355,19 @@ class Controller:
         self.debug_window = w
 
     def open_web(self) -> None:
-        webbrowser.open(f"http://localhost:{brain_process.API_PORT}/")
+        """El dashboard completo (ajustes, personalidades, caras) si el launcher está; si no, la página del cerebro,
+        que solo tiene la vista en directo."""
+        if self.launcher is not None and not self.launcher.available:
+            try:
+                self.launcher.start()
+                for _ in range(30):
+                    if self.launcher.available:
+                        break
+                    time.sleep(0.2)
+            except OSError:
+                pass
+        port = brain_process.LAUNCHER_PORT if brain_process.port_open(brain_process.LAUNCHER_PORT)             else brain_process.API_PORT
+        webbrowser.open(f"http://localhost:{port}/")
 
     def restart_brain(self) -> None:
         if self.brain is not None:

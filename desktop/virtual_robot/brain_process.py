@@ -138,3 +138,50 @@ def api(action: str, payload: dict | None = None, timeout: float = 5.0) -> dict:
 def status(timeout: float = 2.0) -> dict:
     with urllib.request.urlopen(f"http://127.0.0.1:{API_PORT}/status", timeout=timeout) as r:
         return json.loads(r.read() or b"{}")
+
+
+LAUNCHER_PORT = 8766
+
+
+class LauncherProcess:
+    """El dashboard de Casey (server/launcher.py, puerto 8766): ajustes, personalidades, packs de caras y la vista en
+    directo. No arranca ningún cerebro por su cuenta; al nuestro lo ve como "externo" (lo muestra y lo controla, pero
+    no lo para ni reinicia). Si ya hay un launcher abierto, se usa ese."""
+
+    def __init__(self) -> None:
+        self.proc: subprocess.Popen | None = None
+        self.log_path = config_dir() / "launcher.log"
+
+    @property
+    def available(self) -> bool:
+        return port_open(LAUNCHER_PORT)
+
+    def start(self) -> str:
+        if self.proc is not None and self.proc.poll() is None:
+            return "el panel ya está en marcha"
+        if port_open(LAUNCHER_PORT):
+            return "uso el panel que ya estaba abierto"
+        self.log_path.parent.mkdir(parents=True, exist_ok=True)
+        env = {k: v for k, v in os.environ.items() if k != "ROCKY_START_BRAIN"}   # el cerebro lo lleva la app
+        env.update(PYTHONIOENCODING="utf-8", PYTHONUNBUFFERED="1")
+        self.proc = subprocess.Popen(
+            [str(brain_python()), "-u", "launcher.py"], cwd=SERVER, env=env, text=True, encoding="utf-8",
+            errors="replace", stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+        threading.Thread(target=self._pump, args=(self.proc,), daemon=True, name="launcher-log").start()
+        return f"panel en http://localhost:{LAUNCHER_PORT}/"
+
+    def _pump(self, proc: subprocess.Popen) -> None:
+        with open(self.log_path, "a", encoding="utf-8") as log:
+            log.write(f"\n── {time.strftime('%Y-%m-%d %H:%M:%S')} panel arrancado por el robot virtual ──\n")
+            for line in proc.stdout:
+                log.write(redact(line.rstrip()) + "\n")
+                log.flush()
+
+    def stop(self) -> None:
+        if self.proc is not None and self.proc.poll() is None:
+            self.proc.terminate()
+            try:
+                self.proc.wait(5)
+            except subprocess.TimeoutExpired:
+                self.proc.kill()

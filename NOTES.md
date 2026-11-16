@@ -554,3 +554,15 @@ cerebro, volumen 0,7; VAD Silero del cerebro sobre la grabación; 3 repeticiones
   Rocky (cara Default). 31 tests de `desktop/`, cada paquete validado con `brain.characters.clean` en en/es.
 - Pendiente: cada personaje con su propio estilo de dibujo y animaciones (fase 6); el reloj del cerebro sale en 12 h
   por defecto (cambiar en el dashboard).
+
+### Ajustes: el dashboard del launcher (2026-11-16)
+
+- La bandeja abría la página propia del cerebro (8767), que no tiene ajustes ("Settings are edited through the
+  launcher…"). Ahora la app arranca también `server/launcher.py` (8766, sin cerebro propio: ve el de la app como
+  "externo") y **"Ajustes y panel web"** abre ese dashboard. Si ya había un launcher abierto, usa ese. Log en
+  `%APPDATA%\desk-robot-virtual\launcher.log`. Se cierra al salir.
+- Probado: dashboard 200 con Settings, `/launcher/state` → `external: true`, ajustes y personajes legibles; al salir
+  no queda ningún proceso.
+- Límites: el botón de cambiar de personalidad del dashboard no puede reiniciar un cerebro externo → los personajes
+  se cambian desde la bandeja. Los personajes creados en el dashboard (`server/characters/`) no salen en el menú de
+  la bandeja, que lista los paquetes de `desktop/characters/`.
