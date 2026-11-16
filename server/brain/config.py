@@ -143,6 +143,10 @@ if CHARACTER:
     TTS_MODEL = CHARACTER["tts_model"]
     TTS_ACTING = TTS_MODEL in _characters.ACTING_MODELS
     WAKE_PHRASES = CHARACTER["wake_words"]
+# El modelo de Fish también desde server/.env (p. ej. FISH_TTS_MODEL=s2.1-pro-free, el gratuito); gana al del personaje.
+if os.environ.get("FISH_TTS_MODEL"):
+    TTS_MODEL = os.environ["FISH_TTS_MODEL"].strip()
+    TTS_ACTING = TTS_MODEL in _characters.ACTING_MODELS
 STT_MODEL = "base.en"    # faster-whisper model: base.en ~0.3 s per utterance on an Apple
                          # Silicon Mac, small.en hears a little better but takes ~1 s
 # The Hugging Face commit of that model to download (Systran/faster-whisper-<STT_MODEL>).

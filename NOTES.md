@@ -520,3 +520,17 @@ cerebro, volumen 0,7; VAD Silero del cerebro sobre la grabación; 3 repeticiones
 - Riesgos: una voz que acabe en seco (Fish) deja ~0,23 s de margen real; con Bluetooth puede no bastar. Ajustable con
   `"echo_tail_s"` en `%APPDATA%\desk-robot-virtual\config.json`.
 - La boca puede ir ~0,1 s adelantada respecto al sonido en estos altavoces (usa la latencia declarada).
+
+---
+
+## Voz: Fish Audio gratis con `s2.1-pro-free` (2026-11-16)
+
+- La API de Fish va aparte de los planes de la web, por uso (`s2.1-pro` 15 $/M bytes UTF-8), pero tiene un modelo
+  **`s2.1-pro-free` a 0 $** (docs.fish.audio, pricing-and-rate-limits; condiciones no explicadas).
+- Nuevo ajuste `FISH_TTS_MODEL` en `server/.env` (`brain/config.py`): elige el modelo de Fish sin tocar código y gana
+  al del personaje. Con `FISH_TTS_MODEL=s2.1-pro-free` + `FISH_AUDIO_API_KEY`, Rocky habla con su voz clonada.
+- Probado: síntesis directa (6,6 s de audio, primer trozo a 1,38 s) y pregunta completa por el cerebro (primer audio a
+  1,95 s del final de la pregunta, ~0,25 s más que la voz de Windows), sin caer a la voz de reserva.
+- Si Fish dejara de aceptarlo, el cerebro cae solo a la voz de Windows ("fish audio failed, using the built-in voice").
+- Voces locales probadas antes (Piper davefx/sharvard, Kokoro dora/alex/santa): no convencieron. Alternativa futura:
+  clonación local en la GPU (RTX 4070 SUPER) con XTTS-v2 o Chatterbox.
