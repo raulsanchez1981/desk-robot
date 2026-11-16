@@ -1,0 +1,3 @@
+# Robot virtual: se instala encima del venv del cerebro (server/.venv, Python 3.13).
+#   server\.venv\Scripts\python -m pip install -r desktop\requirements.txt
+pywebview==6.2.1   # ventana con WebView2 (Edge) para la cara

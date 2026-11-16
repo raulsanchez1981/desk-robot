@@ -1,0 +1,150 @@
+"""Ventanas del robot virtual: la cara (pequeña, cuadrada, sin bordes, siempre encima) y el panel de depuración.
+
+La cara se controla con mensajes con forma de protocolo (robot.handle(msg) en ui/robot.js). En la fase 2 los manda
+el panel de depuración; en la fase 3 los mandará el enlace con el cerebro.
+"""
+
+from __future__ import annotations
+
+import json
+import threading
+import time
+from pathlib import Path
+
+import webview
+
+from . import settings, win32
+
+ROOT = Path(__file__).resolve().parents[2]
+SERVER = ROOT / "server"
+UI = Path(__file__).resolve().parent / "ui"
+FACE_TITLE = "Robot virtual"
+DEBUG_TITLE = "Robot virtual: depuración"
+
+
+def _brain_faces():
+    """server/brain/faces.py (solo biblioteca estándar): mismos packs y misma validación que el cerebro."""
+    import sys
+    if str(SERVER) not in sys.path:
+        sys.path.insert(0, str(SERVER))
+    from brain import faces
+    return faces
+
+
+def active_pack_id() -> str:
+    """El pack elegido en el dashboard (server/settings.json), o el de Rocky."""
+    try:
+        data = json.loads((SERVER / "settings.json").read_text(encoding="utf-8"))
+        return str(data.get("face", {}).get("pack") or "rocky")
+    except (OSError, ValueError, AttributeError):
+        return "rocky"
+
+
+class FaceWindow:
+    def __init__(self, state: settings.WindowState) -> None:
+        self.state = state
+        self.hwnd = 0
+        self.ready = threading.Event()
+        faces = _brain_faces()
+        x, y, size = settings.place(state, win32.monitors(), win32.work_area())
+        self.size = size
+        self._place = (x, y)
+        self.window = webview.create_window(
+            FACE_TITLE, url=str(UI / "face.html"), js_api=_FaceApi(self, faces),
+            width=size, height=size, x=x, y=y, frameless=True, easy_drag=False, on_top=True,
+            resizable=False, background_color="#1b1612", min_size=(settings.MIN_SIZE, settings.MIN_SIZE))
+        self.window.events.shown += self._on_shown
+
+    def _on_shown(self) -> None:
+        for _ in range(50):                    # el HWND aparece un instante después del evento
+            self.hwnd = win32.find_window(FACE_TITLE)
+            if self.hwnd:
+                break
+            time.sleep(0.05)
+        win32.round_corners(self.hwnd)
+        x, y = self._place
+        win32.set_window_rect(self.hwnd, x, y, self.size, self.size)   # tamaño exacto (ver win32.set_window_rect)
+        self.ready.set()
+        threading.Thread(target=self._remember_position, daemon=True).start()
+
+    def resize(self, size: int, final: bool) -> int:
+        size = max(settings.MIN_SIZE, min(settings.MAX_SIZE, int(size)))
+        win32.set_window_rect(self.hwnd, None, None, size, size)
+        self.size = size
+        return size
+
+    def _remember_position(self) -> None:
+        """Guarda posición y tamaño cuando cambian (cada segundo como mucho)."""
+        last = None
+        while True:
+            time.sleep(1.0)
+            if not self.hwnd:
+                continue
+            x, y, w, h = win32.window_rect(self.hwnd)
+            if w <= 0:
+                continue
+            now = (x, y, max(w, h))
+            if now != last:
+                last = now
+                self.state.x, self.state.y, self.state.size = now
+                try:
+                    settings.save(self.state)
+                except OSError as e:
+                    print(f"(no pude guardar la posición de la ventana: {e})")
+
+    def send(self, msg: dict) -> None:
+        """Un mensaje con forma de protocolo para la cara (desde cualquier hilo)."""
+        self.window.evaluate_js(f"window.robot && robot.handle({json.dumps(msg)})")
+
+    def state_js(self) -> dict | None:
+        return self.window.evaluate_js("window.robot && robot.sim ? robot.state() : null")
+
+
+class _FaceApi:
+    """Lo que ui/robot.js puede pedir a Python."""
+
+    def __init__(self, owner: FaceWindow, faces) -> None:
+        self._owner, self._faces = owner, faces
+
+    def init(self) -> dict:
+        _, rocky = self._faces.load_or_default("rocky")
+        _, pack = self._faces.load_or_default(active_pack_id())
+        return {"emotions": self._faces.EMOTIONS, "fallback": rocky, "pack": pack, "asleep": False}
+
+    def resize(self, size: int, final: bool = False) -> int:
+        return self._owner.resize(size, final)
+
+
+class _DebugApi:
+    """Lo que ui/debug.html puede pedir a Python: mandar mensajes a la cara y leer packs."""
+
+    def __init__(self, face: FaceWindow, faces) -> None:
+        self._face, self._faces = face, faces
+
+    def info(self) -> dict:
+        packs = [{"id": p["id"], "name": p.get("pack", {}).get("name", p["id"])}
+                 for p in self._faces.list_packs() if "pack" in p]
+        return {"emotions": self._faces.EMOTIONS, "packs": packs, "active": active_pack_id()}
+
+    def send(self, msg: dict) -> bool:
+        if not isinstance(msg, dict) or not isinstance(msg.get("type"), str):
+            return False
+        self._face.send(msg)
+        return True
+
+    def use_pack(self, pack_id: str) -> bool:
+        _, pack = self._faces.load_or_default(pack_id)
+        self._face.send(self._faces.robot_message(pack, save=False))
+        return True
+
+    def state(self) -> dict | None:
+        return self._face.state_js()
+
+
+def run(debug: bool) -> None:
+    win32.make_dpi_aware()
+    face = FaceWindow(settings.load())
+    if debug:
+        webview.create_window(DEBUG_TITLE, url=str(UI / "debug.html"), js_api=_DebugApi(face, _brain_faces()),
+                              width=480, height=760, min_size=(400, 500))
+    webview.start(private_mode=True)

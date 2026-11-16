@@ -1,0 +1,147 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>Robot virtual: depuración</title>
+<style>
+  :root { color-scheme: dark; --bg: #121214; --card: #1c1c20; --line: #2c2c33; --text: #e8e6e3; --mute: #9a968f;
+          --amber: #f2b45c; }
+  body { margin: 0; padding: 14px; background: var(--bg); color: var(--text); font: 14px/1.4 "Segoe UI", sans-serif; }
+  h1 { font-size: 16px; margin: 0 0 12px; }
+  section { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; margin-bottom: 10px; }
+  h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--mute); margin: 0 0 8px; }
+  .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+  .row { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+  button, select { background: #26262c; color: var(--text); border: 1px solid var(--line); border-radius: 7px;
+                   padding: 6px 8px; font: inherit; cursor: pointer; }
+  button:hover { border-color: var(--amber); }
+  button.on { background: var(--amber); color: #1b1612; border-color: var(--amber); }
+  label { display: grid; grid-template-columns: 44px 1fr 46px; align-items: center; gap: 8px; margin: 4px 0; }
+  input[type=range] { width: 100%; accent-color: var(--amber); }
+  output { text-align: right; font-variant-numeric: tabular-nums; color: var(--mute); }
+  #state { font: 12px/1.5 "Cascadia Mono", Consolas, monospace; color: var(--mute); white-space: pre; }
+</style>
+</head>
+<body>
+<h1>Robot virtual: depuración</h1>
+
+<section>
+  <h2>Emoción</h2>
+  <div class="grid" id="emotions"></div>
+</section>
+
+<section>
+  <h2>Estado</h2>
+  <div class="row">
+    <button id="sleep">Dormir</button>
+    <button id="wake">Despertar</button>
+    <button id="talk">Hablar (simulado)</button>
+    <button id="cycle">Recorrer caras</button>
+  </div>
+</section>
+
+<section>
+  <h2>Cabeza</h2>
+  <label>Pan <input type="range" id="pan" min="-95" max="95" value="0"><output id="panv">0°</output></label>
+  <label>Tilt <input type="range" id="tilt" min="-85" max="85" value="0"><output id="tiltv">0°</output></label>
+  <div class="row">
+    <button data-move="center">Centro</button>
+    <button data-move="left">Mirar izquierda</button>
+    <button data-move="right">Mirar derecha</button>
+    <button data-move="nod">Asentir</button>
+    <button data-move="shake">Negar</button>
+    <button data-move="dance">Bailar</button>
+  </div>
+</section>
+
+<section>
+  <h2>Pack de caras</h2>
+  <div class="row"><select id="pack"></select></div>
+</section>
+
+<section>
+  <h2>Lo que muestra la ventana</h2>
+  <div id="state">—</div>
+</section>
+
+<script>
+"use strict";
+const $ = id => document.getElementById(id);
+let api, talkTimer = null, cycleTimer = null, moveTimers = [];
+
+const send = msg => api.send(msg);
+const head = (pan, tilt) => {
+  if (pan != null) { send({ type: "pan", deg: pan }); $("pan").value = pan; $("panv").textContent = `${pan}°`; }
+  if (tilt != null) { send({ type: "tilt", deg: tilt }); $("tilt").value = tilt; $("tiltv").textContent = `${tilt}°`; }
+};
+// Una secuencia de [ms desde el inicio, pan, tilt, emoción?]
+function play(steps) {
+  moveTimers.forEach(clearTimeout); moveTimers = [];
+  for (const [at, pan, tilt, emo] of steps)
+    moveTimers.push(setTimeout(() => { head(pan, tilt); if (emo) send({ type: "emotion", name: emo }); }, at));
+}
+const MOVES = {
+  center: [[0, 0, 0]],
+  left: [[0, -60, 0]],
+  right: [[0, 60, 0]],
+  nod: [[0, null, -15], [250, null, 10], [500, null, -15], [750, null, 10], [1000, null, 0]],
+  shake: [[0, -20, null], [250, 20, null], [500, -20, null], [750, 20, null], [1000, 0, null]],
+  // como "groove" de server/brain/dance.py, en pequeño: cabezadas al ritmo mientras se balancea
+  dance: (() => {
+    const beat = 420, out = [];
+    for (let i = 0; i < 16; i++) out.push([i * beat, (i % 4 < 2 ? -1 : 1) * 30, i % 2 ? 12 : -8, i === 0 ? "happy" : i === 8 ? "excited" : null]);
+    out.push([16 * beat, 0, 0, "happy"]);
+    return out;
+  })(),
+};
+
+async function start() {
+  api = window.pywebview.api;
+  const info = await api.info();
+  for (const e of info.emotions) {
+    const b = document.createElement("button");
+    b.textContent = e; b.dataset.emotion = e;
+    b.onclick = () => send({ type: "emotion", name: e });
+    $("emotions").appendChild(b);
+  }
+  for (const p of info.packs) {
+    const o = document.createElement("option");
+    o.value = p.id; o.textContent = p.name; o.selected = p.id === info.active;
+    $("pack").appendChild(o);
+  }
+  $("pack").onchange = () => api.use_pack($("pack").value);
+  $("sleep").onclick = () => { send({ type: "emotion", name: "sleepy" }); send({ type: "asleep", on: true }); head(0, 0); };
+  $("wake").onclick = () => { send({ type: "asleep", on: false }); send({ type: "emotion", name: "neutral" }); };
+  $("talk").onclick = () => {
+    if (talkTimer) { clearInterval(talkTimer); talkTimer = null; send({ type: "mouth", level: -1 }); $("talk").classList.remove("on"); return; }
+    let t = 0;   // sílabas: un nivel RMS que sube y baja, con pausas, 25 veces por segundo (como el mensaje "mouth")
+    talkTimer = setInterval(() => {
+      t += 0.04;
+      const syll = Math.max(0, Math.sin(t * 2 * Math.PI * 4)) * (0.5 + 0.5 * Math.sin(t * 1.3));
+      send({ type: "mouth", level: +(Math.sin(t * 0.7) > -0.6 ? 0.03 + 0.12 * syll : 0).toFixed(3) });
+    }, 40);
+    $("talk").classList.add("on");
+  };
+  $("cycle").onclick = () => {
+    if (cycleTimer) { clearInterval(cycleTimer); cycleTimer = null; $("cycle").classList.remove("on"); return; }
+    let i = 0;
+    const next = () => send({ type: "emotion", name: info.emotions[i++ % info.emotions.length] });
+    next(); cycleTimer = setInterval(next, 2500); $("cycle").classList.add("on");
+  };
+  $("pan").oninput = () => head(+$("pan").value, null);
+  $("tilt").oninput = () => head(null, +$("tilt").value);
+  document.querySelectorAll("[data-move]").forEach(b => b.onclick = () => play(MOVES[b.dataset.move]));
+  setInterval(async () => {
+    const s = await api.state();
+    if (!s) return;
+    $("state").textContent =
+      `emoción  ${s.emotion}\ndormido  ${s.asleep ? "sí" : "no"}\nhablando ${s.talking ? "sí" : "no"}\n` +
+      `pan      ${s.pan.toFixed(1)}°\ntilt     ${s.tilt.toFixed(1)}°`;
+    document.querySelectorAll("[data-emotion]").forEach(b => b.classList.toggle("on", b.dataset.emotion === s.emotion));
+  }, 300);
+}
+if (window.pywebview && window.pywebview.api) start();
+else window.addEventListener("pywebviewready", start, { once: true });
+</script>
+</body>
+</html>

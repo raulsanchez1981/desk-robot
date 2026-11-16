@@ -338,3 +338,40 @@ pequeños (`config.py` al final, `ears.py` idioma de Whisper + `normalize` sin t
 - Probado: 125 tests OK con `ROBOT_LANGUAGE=en` y `=es`; `ask ¿qué es un fin de semana?` → respuesta en español en
   personaje; `ask gira la cabeza a la izquierda` → `look` izquierda. Primer audio a 1,2-1,8 s.
 - Pendiente: probarlo hablando (tú). Los mensajes de consola del cerebro siguen en inglés ("say hey Rocky").
+
+---
+
+## FASE 2 — Ventana flotante con la cara y panel de depuración (sin cerebro)
+
+Arranque (desde `desktop/`, con el venv del cerebro):
+
+    ..\server\.venv\Scripts\python -m pip install -r requirements.txt   # una vez
+    ..\server\.venv\Scripts\python -m virtual_robot --debug
+
+**Cómo está hecho**
+
+- `virtual_robot/ui/facekit.js`: copia **generada** del dibujo de caras del dashboard (`tools/sync_facekit.py`),
+  que a su vez es la copia del firmware. Tras un `git merge upstream/main`, volver a ejecutar el script; el test
+  `test_copy_matches_dashboard` falla si se olvida.
+- `ui/robot.js`: `robot.handle(msg)` acepta los mensajes del protocolo (`emotion`, `pan`, `tilt`, `motion`,
+  `asleep`, `face`, `mouth`, `settings`…). Cuello con el mismo perfil de velocidad/aceleración que los servos;
+  boca con el nivel RMS y caducidad de 300 ms como el firmware; dormido: cara de sueño 5 s y luego reloj.
+- `app.py`: ventana sin bordes, siempre encima, cuadrada, arrastrable desde cualquier punto y redimensionable desde
+  el asa de la esquina (120-900 px). Posición y tamaño en `%APPDATA%\desk-robot-virtual\config.json`; si la
+  posición guardada no cabe entera en ningún monitor, vuelve abajo a la derecha del principal.
+- Panel de depuración (`--debug`): las 12 emociones, dormir/despertar, hablar simulado, recorrer caras, pan/tilt,
+  movimientos (centro, mirar a los lados, asentir, negar, bailar) y selector de pack.
+
+**Decisiones / hallazgos**
+
+- **Sin fondo transparente**: pywebview 6.2.1 + WebView2 157 en Windows pinta un fondo opaco aunque se pida
+  `transparent=True` (probado con captura). En su lugar la ventana es la "cabeza" y tiene las esquinas redondeadas
+  nativas de Windows 11 (DWM).
+- pywebview descuenta un borde (16×39 px) que una ventana sin marco no tiene: el tamaño y la posición se fijan con
+  `SetWindowPos` directamente.
+
+**Probado de verdad** (script con capturas): tamaño exacto 260→180 px, emociones (`happy`, `love`), cabeza a
+pan 60 / tilt 20, boca hablando, dormir → reloj a los 5 s, posición guardada. 9 tests de `desktop/` OK.
+
+**No probado por mí**: arrastrar con el ratón y redimensionar desde el asa (necesitan tu mano); el panel de
+depuración solo lo he abierto, no clicado.
