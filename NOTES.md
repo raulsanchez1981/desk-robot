@@ -566,3 +566,24 @@ cerebro, volumen 0,7; VAD Silero del cerebro sobre la grabación; 3 repeticiones
 - Límites: el botón de cambiar de personalidad del dashboard no puede reiniciar un cerebro externo → los personajes
   se cambian desde la bandeja. Los personajes creados en el dashboard (`server/characters/`) no salen en el menú de
   la bandeja, que lista los paquetes de `desktop/characters/`.
+
+---
+
+## Memoria a largo plazo, paso 1: datos y fecha (2026-11-16)
+
+- `server/brain/memory.py`: el modelo lleva su memoria con dos herramientas, `remember` (un dato, tercera persona,
+  fecha absoluta) y `forget` (por número o por texto). Se guarda en `server/memory.json` (git-ignored). Los recuerdos
+  van al final del prompt de sistema; la fecha y la hora con cada pregunta. Compartida entre personajes.
+- Enganches: `thinking.py` (prompt + nota de fecha), `main.py` (herramientas "rápidas", comando de consola
+  `memory`), `.gitignore`.
+- Reglas: guardar en silencio, sin tiempos relativos, nada de contraseñas o códigos; "privado" si se pide (por
+  defecto puede contar lo que sabe, decisión del usuario).
+- Filtro de "pensar en voz alta" (`thinking._REASONING`) ampliado: "I should save/remember…" y fechas ISO
+  (`2026-12-16`), que nadie dice hablando y delatan el cálculo.
+- Probado con el modelo real: "tengo tres gatas y una hija" y "me voy de vacaciones dentro de un mes" → guardados
+  (fecha 2026-12-16); **reiniciado el cerebro**, "¿qué sabes de mí?" → los cuenta; "olvida lo de las vacaciones" →
+  borrado. Los recuerdos de prueba se borraron después.
+- Sin nombre configurado escribe "mi humano"; con `HUMAN_NAME` (dashboard, Settings) usa el nombre.
+- `test_focus` falla a veces también sin estos cambios (2 de 8 en HEAD): sensible a tiempos, del proyecto original.
+- Siguiente: paso 2, reconocer a las 3 personas (SFace) y a las 3 gatas (detector "cat" + huella visual), y memoria
+  por persona.

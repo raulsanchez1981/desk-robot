@@ -45,7 +45,7 @@ import time
 
 import websockets
 
-from . import computer, config, decisions, faces, mouth, personality, settings
+from . import computer, config, decisions, faces, memory, mouth, personality, settings
 from . import focus as focus_mode
 from .body import Body
 from .dance import Dancer, length as dance_length
@@ -314,6 +314,10 @@ async def handle_console_line(line: str) -> bool:
         return False
     if cmd == "status":
         print("robot connected" if robot_socket else "no robot connected")
+    elif cmd == "memory":   # memory.py: lo que recuerda
+        facts = memory.load()["facts"]
+        print("\n".join(f"#{x['id']} {x['text']}" + (f" ({x['date']})" if x.get("date") else "") for x in facts)
+              or "(no memories yet)")
     elif cmd == "emo":
         if arg in config.EMOTIONS:
             await send_to_robot({"type": "emotion", "name": arg})
@@ -573,6 +577,9 @@ ABILITIES = {
     "track_face": _sync(lambda args: set_tracking(bool(args.get("on", True)))),
     "dance": _sync(lambda args: dance()),
     "focus_mode": _sync(focus_ability),
+    # memory.py: lo que su humano le cuenta, entre conversaciones (plain functions, como las del ordenador)
+    "remember": lambda args: (memory.remember(args), None),
+    "forget": lambda args: (memory.forget(args), None),
     # the computer abilities (computer.py) are plain functions: no event loop, nothing sent to the robot
     **{name: (lambda fn: lambda args: (fn(args), None))(fn) for name, fn in computer.ACTIONS.items()},
 }
@@ -1620,8 +1627,8 @@ async def main() -> None:
     apply_settings(settings.load())
     loop = asyncio.get_running_loop()
     main_loop = loop
-    brain = RobotBrain(ABILITIES, quick=computer.QUICK, extra_tools=lambda: (
-        computer.tools(computer.controller) + ([focus_mode.TOOL] if decisions.available() else [])))
+    brain = RobotBrain(ABILITIES, quick=computer.QUICK | memory.QUICK, extra_tools=lambda: (
+        computer.tools(computer.controller) + memory.TOOLS + ([focus_mode.TOOL] if decisions.available() else [])))
     tracker = Tracker(eyes, lambda p, t, on: loop.call_soon_threadsafe(head_moves.put_nowait, (p, t, on)))
     body = Body(send_to_robot, tracker)
     dancer = Dancer(send_to_robot, tracker)

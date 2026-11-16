@@ -27,6 +27,7 @@ from collections.abc import Callable, Iterator
 import openai
 
 from . import config
+from . import memory
 from . import personality
 
 _EMOTION_TAG = re.compile(r"^\s*\[(\w+)\]\s*", re.S)
@@ -42,7 +43,11 @@ _SENTENCE_END = re.compile(r"(?<=[!?])\s+|(?<=[^.]\.)(?<!\bMr\.)(?<!\bMrs\.)(?<!
 _REASONING = re.compile(r"\b(?:detectors?|the note|note says|the question is|question is about|is an? (?:\w+ )?question about|"
                         r"knowledge question|the user|"
                         r"my instructions|the instructions say|system prompt|"
-                        r"i should (?:look|use|call|check|get|describe|answer))\b", re.IGNORECASE)
+                        r"i should (?:look|use|call|check|get|describe|answer|save|remember|store|forget)|"
+                        r"absolute date|save (?:this|that|it) (?:to|in|with)|(?:my|long-term) memory tool|"
+                        r"\d{4}-\d{2}-\d{2})\b",   # memory.py: una fecha ISO no se dice hablando; es el cálculo
+
+                        re.IGNORECASE)
 
 
 def _thinking_aloud(sentence: str) -> bool:
@@ -194,7 +199,7 @@ class RobotBrain:
         otherwise he answers from memory and claims to see things. `notes` is perception's line about what the
         camera's detectors notice; `passive` = the picture came along for context, not because he was asked to look.
         """
-        content: list[dict] = [{"type": "text", "text": question}]
+        content: list[dict] = [{"type": "text", "text": question}, {"type": "text", "text": memory.now_note()}]
         if notes:
             content.append({"type": "text", "text": notes})
         if jpeg is not None and passive:
@@ -274,7 +279,9 @@ class RobotBrain:
             stream = self.client.chat.completions.create(
                 model=config.MODEL,
                 max_tokens=200,  # backstop; the sentence limit does the real work
-                messages=[{"role": "system", "content": personality.SYSTEM_PROMPT}, *self.history],
+                # memory.py: los recuerdos van al final del prompt de sistema
+                messages=[{"role": "system", "content": personality.SYSTEM_PROMPT + memory.prompt_block(human=config.HUMAN_NAME)},
+                          *self.history],
                 tools=[*TOOLS, *self.extra_tools()] if self.actions else openai.NOT_GIVEN,
                 stream=True,
                 extra_body=self._extra,

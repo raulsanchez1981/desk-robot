@@ -50,3 +50,6 @@ docs/cad/
 
 # Custom PCBs (KiCad, Gerbers): sold with the print files, not in the repo
 pcb/
+
+# Memoria a largo plazo del robot (brain/memory.py): datos personales
+server/memory.json

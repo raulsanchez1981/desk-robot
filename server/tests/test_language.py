@@ -20,9 +20,11 @@ def _config_in(lang: str) -> dict:
     code = (
         "import json; from brain import config, ears, personality\n"
         "print(json.dumps({'lang': config.LANGUAGE, 'stt': config.STT_MODEL, 'stt_lang': config.STT_LANGUAGE,"
-        " 'culture': config.TTS_CULTURE, 'wake': ears.strip_wake_word('Oye, Rocky, ¿qué hora es?'),"
-        " 'woke_en': ears.strip_wake_word('Hey Rocky, what time is it?')[0],"
-        " 'sleep': any(p in ears.normalize('Buenas noches, Rocky') for p in config.SLEEP_PHRASES),"
+        # con el personaje que esté activo en settings.json (Rocky, Jarvis...), no siempre Rocky
+        " 'culture': config.TTS_CULTURE, 'name': config.ROBOT_NAME, 'rocky': config.CHARACTER is None,"
+        " 'wake': ears.strip_wake_word(f'Oye, {config.ROBOT_NAME}, ¿qué hora es?'),"
+        " 'woke_en': ears.strip_wake_word(f'Hey {config.ROBOT_NAME}, what time is it?')[0],"
+        " 'sleep': any(p in ears.normalize(f'Buenas noches, {config.ROBOT_NAME}') for p in config.SLEEP_PHRASES),"
         " 'camera': any(f' {w} ' in ' ' + ears.normalize('¿Qué ves ahí?') + ' ' for w in config.CAMERA_WORDS),"
         " 'spanish_rules': 'ALWAYS answer in Spanish' in personality.SYSTEM_PROMPT,"
         " 'wake_line': personality.LINES['wake']}))"
@@ -55,14 +57,16 @@ class ConfigTest(unittest.TestCase):
         self.assertTrue(c["sleep"])
         self.assertTrue(c["camera"])
         self.assertTrue(c["spanish_rules"])
-        self.assertEqual(c["wake_line"], "¿Pregunta?")
+        if c["rocky"]:
+            self.assertEqual(c["wake_line"], "¿Pregunta?")
 
     def test_english_is_unchanged(self):
         c = _config_in("en")
         self.assertEqual((c["lang"], c["stt"], c["stt_lang"], c["culture"]), ("en", "base.en", "en", "en-US"))
         self.assertTrue(c["woke_en"])
         self.assertFalse(c["spanish_rules"])
-        self.assertEqual(c["wake_line"], "Question?")
+        if c["rocky"]:
+            self.assertEqual(c["wake_line"], "Question?")
 
     def test_unknown_language_falls_back_to_english(self):
         self.assertEqual(_config_in("fr")["lang"], "en")
