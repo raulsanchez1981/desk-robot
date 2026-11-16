@@ -17,7 +17,7 @@ from virtual_robot import settings  # noqa: E402
 
 class FaceKitSyncTest(unittest.TestCase):
     def test_copy_matches_dashboard(self):
-        self.assertEqual(sync_facekit.TARGET.read_text(encoding="utf-8"), sync_facekit.expected(),
+        self.assertEqual(sync_facekit.current(), sync_facekit.expected(),
                          "facekit.js no coincide con dashboard.html: ejecuta python desktop/tools/sync_facekit.py")
 
     def test_extract_needs_the_block(self):

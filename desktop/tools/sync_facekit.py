@@ -38,13 +38,21 @@ def render(block: str) -> str:
             "// No editar a mano: vuelve a ejecutar el script tras actualizar desde upstream.\n" + block)
 
 
+def _lf(text: str) -> str:
+    return text.replace("\r\n", "\n")   # git con autocrlf puede dejar CRLF en Windows
+
+
 def expected() -> str:
-    return render(extract(DASHBOARD.read_text(encoding="utf-8")))
+    return render(extract(_lf(DASHBOARD.read_text(encoding="utf-8"))))
+
+
+def current() -> str:
+    return _lf(TARGET.read_text(encoding="utf-8")) if TARGET.is_file() else ""
 
 
 def main() -> int:
     text = expected()
-    if TARGET.is_file() and TARGET.read_text(encoding="utf-8") == text:
+    if current() == text:
         print("facekit.js ya está al día")
         return 0
     TARGET.parent.mkdir(parents=True, exist_ok=True)
