@@ -125,7 +125,7 @@ def _path(cid: str) -> Path:
 
 
 def load(cid: str) -> dict:
-    return clean(json.loads(_path(cid).read_text()))
+    return clean(json.loads(_path(cid).read_text(encoding="utf-8")))
 
 
 def active(cid: str) -> tuple[str, dict | None]:
@@ -175,7 +175,7 @@ def save(ch: dict, cid: str | None = None) -> str:
             path = DIR / f"{base}-{n}.json"
         cid = path.stem
     tmp = path.with_suffix(".tmp")
-    tmp.write_text(json.dumps(ch, indent=2) + "\n")
+    tmp.write_text(json.dumps(ch, indent=2) + "\n", encoding="utf-8")
     tmp.replace(path)
     return cid
 

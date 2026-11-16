@@ -155,7 +155,7 @@ def load() -> dict:
     """Defaults overlaid with whatever valid values the file has. Never raises."""
     out = defaults()
     try:
-        raw = json.loads(PATH.read_text())
+        raw = json.loads(PATH.read_text(encoding="utf-8"))
     except (OSError, ValueError):
         return out
     if not isinstance(raw, dict):
@@ -193,7 +193,7 @@ def _write(data: dict) -> None:
     # write-then-rename, so a crash or the other process never sees half a file
     PATH.parent.mkdir(parents=True, exist_ok=True)
     fd, tmp = tempfile.mkstemp(dir=PATH.parent, prefix=".settings-", suffix=".json")
-    with os.fdopen(fd, "w") as f:
+    with os.fdopen(fd, "w", encoding="utf-8") as f:
         json.dump(data, f, indent=2)
         f.write("\n")
     os.replace(tmp, PATH)

@@ -130,7 +130,7 @@ def _path(pack_id: str) -> Path:
 
 
 def load(pack_id: str) -> dict:
-    return clean(json.loads(_path(pack_id).read_text()))
+    return clean(json.loads(_path(pack_id).read_text(encoding="utf-8")))
 
 
 def load_or_default(pack_id: str) -> tuple[str, dict]:
@@ -178,7 +178,7 @@ def save_custom(pack: dict, pack_id: str | None = None) -> str:
             path = CUSTOM_DIR / f"{base}-{n}.json"
         pack_id = "custom/" + path.stem
     tmp = path.with_suffix(".tmp")
-    tmp.write_text(json.dumps(pack, indent=2) + "\n")
+    tmp.write_text(json.dumps(pack, indent=2) + "\n", encoding="utf-8")
     tmp.replace(path)
     return pack_id
 

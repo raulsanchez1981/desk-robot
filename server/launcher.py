@@ -106,10 +106,10 @@ class Brain:
             return "already running"
         if self.external():
             return "a brain started elsewhere is already running"
-        env = dict(LAUNCH_ENV, PYTHONUNBUFFERED="1")
+        env = dict(LAUNCH_ENV, PYTHONUNBUFFERED="1", PYTHONIOENCODING="utf-8")
         self.log("── launcher: starting the server ──")
         self.proc = subprocess.Popen(
-            [brain_python(), "-u", "-m", "brain.main"], cwd=HERE, env=env, text=True, bufsize=1,
+            [brain_python(), "-u", "-m", "brain.main"], cwd=HERE, env=env, text=True, encoding="utf-8", errors="replace", bufsize=1,
             stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
         self.started_at = time.time()
         self.exit_code = None
@@ -196,7 +196,7 @@ def env_value(key: str) -> str:
     started in (exported in the shell); "" if neither has it."""
     found = ""
     try:
-        for line in config._ENV_FILE.read_text().splitlines():
+        for line in config._ENV_FILE.read_text(encoding="utf-8-sig").splitlines():
             k, sep, v = line.partition("=")
             if sep and k.strip() == key:
                 found = v.strip().strip('"').strip("'")
@@ -306,7 +306,7 @@ class Handler(BaseHTTPRequestHandler):
         q = urllib.parse.parse_qs(url.query)
         if url.path == "/":
             try:
-                page = PAGE.read_text().replace("{name}", active_name()).encode()
+                page = PAGE.read_text(encoding="utf-8").replace("{name}", active_name()).encode()
             except OSError as e:
                 return self._reply(500, "text/plain", f"dashboard page missing: {e}".encode())
             return self._reply(200, "text/html; charset=utf-8", page)
