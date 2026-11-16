@@ -1,3 +1,5 @@
 # Robot virtual: se instala encima del venv del cerebro (server/.venv, Python 3.13).
 #   server\.venv\Scripts\python -m pip install -r desktop\requirements.txt
 pywebview==6.2.1   # ventana con WebView2 (Edge) para la cara
+pystray==0.19.5    # icono en la bandeja del sistema
+pillow==13.0.0     # dibuja el icono (ya lo trae mediapipe)

@@ -421,3 +421,45 @@ de auriculares.
 Pedida el 2026-11-16, para cuando todo funcione: caras de más resolución (ahora son los 128×64 píxeles del OLED
 escalados, se ven pixeladas), otros personajes y animaciones. Punto de partida: `robot.handle(msg)` ya separa el
 protocolo del dibujo, así que un renderizador nuevo solo tiene que implementar emociones, cuello, boca y sueño.
+
+---
+
+## FASE 4 — Bandeja, atajos, dormir, arranque del cerebro y con Windows
+
+Arranque normal (ya no hacen falta dos terminales): desde `desktop/`,
+`..\server\.venv\Scripts\python -m virtual_robot` (o doble clic en `desktop\run_virtual_robot.pyw` con el
+`pythonw` del venv). La app arranca el cerebro; si ya hay uno escuchando en 8765 (terminal, launcher) usa ese.
+
+**Qué hay**
+
+- `brain_process.py`: cerebro como hijo (stdin en pipe, sin ventana, `PYTHONIOENCODING=utf-8`), salida en
+  `%APPDATA%\desk-robot-virtual\brain.log` con claves/tokens enmascarados (`sk-…`, hex largos, `*KEY=`, `*TOKEN=`).
+  Se cierra con su propio `quit` al salir. Avisa si el puerto 8767 lo tiene otro proceso (cerebro colgado).
+- `tray.py`: icono (ojos blancos sobre negro, punto rojo si micro o cámara apagados) con menú: mostrar la cara,
+  micro, cámara, dormir/despertar, panel de depuración, panel web del cerebro (8767), reiniciar el cerebro, arrancar
+  con Windows, salir.
+- `hotkeys.py`: atajos globales con `RegisterHotKey`. Por defecto **Ctrl+Alt+Shift+M** micro, **Ctrl+Alt+C**
+  cámara, **Ctrl+Alt+S** dormir. `Ctrl+Alt+M` (lo acordado) lo tiene otra aplicación de este PC (también
+  `Ctrl+Alt+R`); se cambian en `config.json`, clave `hotkeys`, y si alguno está cogido la bandeja lo avisa.
+- Interruptores visibles: iconos rojos de micro/cámara tachados en la esquina de la cara + punto rojo en la bandeja.
+  Micro apagado = no se manda nada al cerebro. Cámara: el interruptor existe; la webcam llega en la fase 5.
+- Dormir = como el robot físico: se lo pide al cerebro (`POST /api/sleep`): cabeza al centro, cara de sueño,
+  reloj, y "oye Rocky" lo despierta. Sin cerebro, solo la cara.
+- La cara no sale en la barra de tareas ni en Alt+Tab (la app vive en la bandeja); Alt+F4 la oculta.
+- Una sola copia (mutex con nombre); la segunda avisa y sale.
+- Arrancar con Windows: `HKCU\…\Run\DeskRobotVirtual` → `pythonw run_virtual_robot.pyw`; sin consola, la salida va
+  a `%APPDATA%\desk-robot-virtual\app.log`. **Se activa desde la bandeja** (el entorno de trabajo no me dejó escribir
+  el registro yo).
+
+**Probado de verdad** (la app completa controlada por script, con pulsaciones reales de teclado): el cerebro lo
+arranca la app y conecta en ~3 s; icono en la bandeja; atajos registrados; segunda copia rechazada; micro apagado
+por código y encendido con `Ctrl+Alt+Shift+M` (indicador rojo aparece y desaparece); cámara con `Ctrl+Alt+C`;
+`Ctrl+Alt+S` cambia el estado de sueño; ocultar/mostrar; fuera de la barra de tareas; al salir el cerebro se cierra;
+`brain.log` sin token ni clave. 21 tests de `desktop/`.
+
+**Fallos encontrados**: (1) la comprobación de copia única leía mal el último error de Win32 (arreglado con
+`use_last_error`). (2) Dormir por la API devolvía HTTP 500 "Event loop is closed": un cerebro arrancado antes desde
+una terminal se quedó a medio cerrar con el puerto 8767 ocupado, así que las órdenes iban a él. No es un fallo de la
+app; ahora lo detecta y avisa.
+
+**No probado por mí**: clics en el menú de la bandeja con el ratón, el arranque real al iniciar sesión.

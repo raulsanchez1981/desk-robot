@@ -45,6 +45,8 @@ class BrainLink:
     def __init__(self, to_face: Callable[[dict], None], url: str = "ws://127.0.0.1:8765") -> None:
         self.to_face, self.url = to_face, url
         self.connected = False
+        self.camera_enabled = True   # interruptor del usuario; la webcam llega en la fase 5
+        self._stopping = False
         self.status = "arrancando"
         self.pan, self.emotion = 0.0, "neutral"
         self._loop: asyncio.AbstractEventLoop | None = None
@@ -56,6 +58,20 @@ class BrainLink:
     # ── arranque ────────────────────────────────────────────────────────────────────────────────────────────────
     def start(self) -> None:
         threading.Thread(target=self._run, daemon=True, name="brain-link").start()
+
+    def stop(self) -> None:
+        """Cierra la conexión y el audio (al salir de la app)."""
+        self._stopping = True
+        if self._loop is not None and self._ws is not None:
+            try:
+                asyncio.run_coroutine_threadsafe(self._ws.close(), self._loop).result(timeout=2)
+            except Exception:   # noqa: BLE001 - ya estaba cerrada
+                pass
+        for part in (self.mic, self.speaker):
+            try:
+                part.stop()
+            except Exception:   # noqa: BLE001
+                pass
 
     def _run(self) -> None:
         try:
@@ -76,7 +92,7 @@ class BrainLink:
             print(f"robot virtual: {self.status}")
             return
         warned = False
-        while True:
+        while not self._stopping:
             try:
                 async with websockets.connect(self.url, max_size=1024 * 1024, open_timeout=5) as ws:
                     await ws.send(json.dumps({"type": "hello", "who": "virtual-robot", "fw": FW, "token": token,
@@ -93,7 +109,7 @@ class BrainLink:
                         if t.exception() and not isinstance(t.exception(), websockets.ConnectionClosed):
                             print(f"robot virtual: error en el enlace: {t.exception()!r}")
             except (OSError, websockets.WebSocketException, asyncio.TimeoutError) as e:
-                if not warned:
+                if not warned and not self._stopping:
                     print(f"robot virtual: sin cerebro en {self.url} ({type(e).__name__}); reintento cada "
                           f"{RETRY_S:.0f} s")
                     warned = True

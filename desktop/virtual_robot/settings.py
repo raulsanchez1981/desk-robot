@@ -62,6 +62,30 @@ def save(state: WindowState, path: Path | None = None) -> None:
     os.replace(tmp, path)
 
 
+# Atajos globales (se pueden cambiar en config.json, clave "hotkeys"). Ctrl+Alt+M lo usa a menudo otra aplicación.
+DEFAULT_HOTKEYS = {"mic": "Ctrl+Alt+Shift+M", "cam": "Ctrl+Alt+C", "sleep": "Ctrl+Alt+S"}
+
+
+def load_hotkeys(path: Path | None = None) -> dict[str, str]:
+    """Los atajos de config.json sobre los de por defecto; se escriben ahí la primera vez para que se vean."""
+    path = path or config_dir() / "config.json"
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+        data = data if isinstance(data, dict) else {}
+    except (OSError, ValueError):
+        data = {}
+    saved = data.get("hotkeys") if isinstance(data.get("hotkeys"), dict) else {}
+    keys = {k: str(saved.get(k) or v) for k, v in DEFAULT_HOTKEYS.items()}
+    if saved != keys:
+        data["hotkeys"] = keys
+        try:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(json.dumps(data, indent=2), encoding="utf-8")
+        except OSError:
+            pass
+    return keys
+
+
 def place(state: WindowState, monitors: list[tuple[int, int, int, int]],
           work_area: tuple[int, int, int, int]) -> tuple[int, int, int]:
     """(x, y, ancho) donde abrir la ventana: la posición guardada si sigue viéndose entera en algún monitor

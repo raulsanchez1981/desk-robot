@@ -32,6 +32,10 @@
     transition: opacity .2s;
   }
   body:hover #grip { opacity: .35; }
+  /* Micro o cámara apagados: siempre a la vista, en rojo, arriba a la izquierda. */
+  #status { position: absolute; left: 5px; top: 5px; display: flex; gap: 4px; pointer-events: none; }
+  #status svg { width: max(14px, 9vh); height: max(14px, 9vh); color: #ff4040; }
+  [hidden] { display: none !important; }
   #grip:hover { opacity: .9 !important; }
 </style>
 </head>
@@ -41,6 +45,14 @@
     <canvas id="face" width="128" height="64" class="pywebview-drag-region"></canvas>
     <div id="clock" class="pywebview-drag-region"><div class="time">--:--</div><div class="date"></div></div>
   </div>
+</div>
+<div id="status">
+  <svg id="mic-off" hidden viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"
+       role="img" aria-label="micro apagado"><title>Micro apagado</title>
+    <rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/><path d="M3 3l18 18"/></svg>
+  <svg id="cam-off" hidden viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"
+       role="img" aria-label="cámara apagada"><title>Cámara apagada</title>
+    <rect x="3" y="7" width="13" height="10" rx="2"/><path d="M16 11l5-3v8l-5-3"/><path d="M3 3l18 18"/></svg>
 </div>
 <div id="grip" title="Arrastra para cambiar el tamaño"></div>
 <script src="facekit.js"></script>

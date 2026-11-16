@@ -1,7 +1,8 @@
-"""Ventanas del robot virtual: la cara (la pantalla del robot, 2:1, sin bordes, siempre encima) y el panel de depuración.
+"""El robot virtual: la ventana de la cara, el enlace con el cerebro, el cerebro mismo, la bandeja y los atajos.
 
-La cara se controla con mensajes con forma de protocolo (robot.handle(msg) en ui/robot.js). En la fase 2 los manda
-el panel de depuración; en la fase 3 los mandará el enlace con el cerebro.
+La cara (la pantalla del robot, 2:1, sin bordes, siempre encima) se controla con mensajes con forma de protocolo
+(robot.handle(msg) en ui/robot.js). Los manda el enlace con el cerebro (link.py) y, para probar, el panel de
+depuración. El Controller une lo demás: interruptores de micro y cámara, dormir, mostrar/ocultar y salir.
 """
 
 from __future__ import annotations
@@ -9,11 +10,12 @@ from __future__ import annotations
 import json
 import threading
 import time
+import webbrowser
 from pathlib import Path
 
 import webview
 
-from . import settings, win32
+from . import autostart, brain_process, settings, win32
 
 ROOT = Path(__file__).resolve().parents[2]
 SERVER = ROOT / "server"
@@ -41,9 +43,10 @@ def active_pack_id() -> str:
 
 
 class FaceWindow:
-    def __init__(self, state: settings.WindowState, start_asleep: bool = False) -> None:
+    def __init__(self, state: settings.WindowState, start_asleep: bool = False, tool_window: bool = False) -> None:
         self.state = state
         self.start_asleep = start_asleep     # con cerebro arranca dormida, como la placa, hasta que él diga
+        self.tool_window = tool_window       # fuera de la barra de tareas (la app vive en la bandeja)
         self.hwnd = 0
         self.ready = threading.Event()       # la ventana existe
         self.loaded = threading.Event()      # robot.js ya pinta la cara y acepta mensajes
@@ -67,6 +70,8 @@ class FaceWindow:
                 break
             time.sleep(0.05)
         win32.round_corners(self.hwnd)
+        if self.tool_window:
+            win32.hide_from_taskbar(self.hwnd)
         x, y = self._place
         win32.set_window_rect(self.hwnd, x, y, self.size, settings.height_for(self.size))   # exacto (ver win32)
         self.ready.set()
@@ -163,19 +168,180 @@ class _DebugApi:
         if s is not None:
             s["link"] = self._link.status if self._link is not None else "sin enlace (--no-brain)"
             s["speaking"] = bool(self._link and self._link.speaker.speaking)
-            s["mic"] = bool(self._link and self._link.mic.wanted and not self._link.speaker.speaking)
+            s["mic"] = bool(self._link and self._link.mic.wanted and self._link.mic.enabled
+                            and not self._link.speaker.speaking)
         return s
+
+
+class Controller:
+    """Une la cara, el enlace, el cerebro, la bandeja y los atajos."""
+
+    def __init__(self, debug: bool, brain: bool) -> None:
+        self.HOTKEYS = settings.load_hotkeys()
+        self.mic_on = True
+        self.cam_on = True
+        self.visible = True
+        self.quitting = False
+        self.autostart = autostart.enabled()
+        self._local_asleep = brain           # sin cerebro, dormir es solo cosa de la cara
+        self.face = FaceWindow(settings.load(), start_asleep=brain, tool_window=True)
+        self.face.window.events.closing += self._on_closing
+        self.brain = brain_process.BrainProcess() if brain else None
+        self.link = None
+        if brain:
+            from .link import BrainLink
+            self.link = BrainLink(self.face.send)
+        self.debug_window = None
+        self._want_debug = debug
+        self.tray = None
+        self.hotkeys = None
+
+    # ── arranque y salida ───────────────────────────────────────────────────────────────────────────────────────
+    def run(self) -> None:
+        webview.start(self._started, private_mode=True)
+
+    def _started(self) -> None:
+        """Ya hay bucle de ventanas: lo demás arranca aquí (hilo aparte de pywebview)."""
+        from .hotkeys import Hotkeys
+        from .tray import Tray
+        if self.brain is not None:
+            print(f"robot virtual: {self.brain.start()}")
+            if self.brain.warning:
+                print(f"robot virtual: {self.brain.warning}")
+        if self.link is not None:
+            self.link.start()
+        self.tray = Tray(self)
+        self.tray.start()
+        if self.brain is not None and self.brain.warning:
+            self.tray.notify(self.brain.warning)
+        self.hotkeys = Hotkeys({self.HOTKEYS["mic"]: self.toggle_mic, self.HOTKEYS["cam"]: self.toggle_cam,
+                                self.HOTKEYS["sleep"]: self.toggle_sleep})
+        self.hotkeys.start()
+        if self.hotkeys.failed:
+            text = (f"Otra aplicación ya usa {', '.join(self.hotkeys.failed)}. Cámbialo en "
+                    f"{settings.config_dir() / 'config.json'} (clave \"hotkeys\").")
+            print(f"robot virtual: {text}")
+            self.tray.notify(text)
+        self.face.loaded.wait(20)
+        self._indicators()
+        if self._want_debug:
+            self.open_debug()
+
+    def _on_closing(self):
+        if self.quitting:
+            return True
+        threading.Thread(target=self.hide, daemon=True).start()   # Alt+F4 la oculta; Salir está en la bandeja
+        return False
+
+    def quit(self) -> None:
+        if self.quitting:
+            return
+        self.quitting = True
+        print("robot virtual: saliendo")
+        if self.hotkeys is not None:
+            self.hotkeys.stop()
+        if self.link is not None:
+            self.link.stop()
+        if self.brain is not None:
+            self.brain.stop()
+        if self.tray is not None:
+            self.tray.stop()
+        for w in (self.debug_window, self.face.window):
+            if w is not None:
+                try:
+                    w.destroy()
+                except Exception:   # noqa: BLE001 - ya cerrada
+                    pass
+
+    # ── interruptores ───────────────────────────────────────────────────────────────────────────────────────────
+    def toggle_mic(self) -> None:
+        self.mic_on = not self.mic_on
+        if self.link is not None:
+            self.link.mic.enabled = self.mic_on
+        print(f"robot virtual: micro {'encendido' if self.mic_on else 'apagado'}")
+        self._indicators()
+
+    def toggle_cam(self) -> None:
+        self.cam_on = not self.cam_on
+        if self.link is not None:
+            self.link.camera_enabled = self.cam_on    # la webcam llega en la fase 5
+        print(f"robot virtual: cámara {'encendida' if self.cam_on else 'apagada'}")
+        self._indicators()
+
+    @property
+    def asleep(self) -> bool:
+        s = self.face.state_js() if self.face.loaded.is_set() else None
+        return bool(s["asleep"]) if s else self._local_asleep
+
+    def toggle_sleep(self) -> None:
+        """Dormir o despertar a Rocky. Con cerebro, se lo pide a él (cabeza al centro, reloj; "oye Rocky" lo
+        despierta); sin cerebro, solo la cara."""
+        on = not self.asleep
+        if self.link is not None and self.link.connected:
+            try:
+                brain_process.api("sleep", {"on": on})
+                return
+            except OSError as e:
+                print(f"robot virtual: el cerebro no contesta a dormir ({e}); duermo solo la cara")
+        self._local_asleep = on
+        self.face.send({"type": "asleep", "on": on})
+        if self.tray is not None:
+            self.tray.refresh()
+
+    def _indicators(self) -> None:
+        self.face.send({"type": "_indicators", "mic": self.mic_on, "cam": self.cam_on})
+        if self.tray is not None:
+            self.tray.refresh()
+
+    # ── ventanas ────────────────────────────────────────────────────────────────────────────────────────────────
+    def toggle_visible(self) -> None:
+        self.hide() if self.visible else self.show()
+
+    def hide(self) -> None:
+        self.face.window.hide()
+        self.visible = False
+        if self.tray is not None:
+            self.tray.refresh()
+
+    def show(self) -> None:
+        self.face.window.show()
+        self.visible = True
+        if self.tray is not None:
+            self.tray.refresh()
+
+    def open_debug(self) -> None:
+        if self.debug_window is not None:
+            try:
+                self.debug_window.show()
+                return
+            except Exception:   # noqa: BLE001 - la cerró el usuario
+                self.debug_window = None
+        w = webview.create_window(DEBUG_TITLE, url=str(UI / "debug.html"),
+                                  js_api=_DebugApi(self.face, _brain_faces(), self.link),
+                                  width=480, height=820, min_size=(400, 500))
+        w.events.closed += lambda: setattr(self, "debug_window", None)
+        self.debug_window = w
+
+    def open_web(self) -> None:
+        webbrowser.open(f"http://localhost:{brain_process.API_PORT}/")
+
+    def restart_brain(self) -> None:
+        if self.brain is not None:
+            print(f"robot virtual: {self.brain.restart()}")
+
+    def toggle_autostart(self) -> None:
+        try:
+            autostart.set_enabled(not self.autostart)
+            self.autostart = autostart.enabled()
+        except OSError as e:
+            print(f"robot virtual: no pude cambiar el arranque con Windows ({e})")
+        if self.tray is not None:
+            self.tray.refresh()
 
 
 def run(debug: bool, brain: bool = True) -> None:
     win32.make_dpi_aware()
-    face = FaceWindow(settings.load(), start_asleep=brain)
-    link = None
-    if brain:
-        from .link import BrainLink
-        link = BrainLink(face.send)
-        link.start()
-    if debug:
-        webview.create_window(DEBUG_TITLE, url=str(UI / "debug.html"), js_api=_DebugApi(face, _brain_faces(), link),
-                              width=480, height=800, min_size=(400, 500))
-    webview.start(private_mode=True)
+    if not win32.single_instance("DeskRobotVirtual"):
+        print("robot virtual: ya hay uno abierto (mira la bandeja del sistema)")
+        return
+    Controller(debug, brain).run()

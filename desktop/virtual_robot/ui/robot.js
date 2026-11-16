@@ -103,6 +103,10 @@ const robot = {
         this.mouthLevel = Number(msg.level);
         this.mouthAt = performance.now();
         break;
+      case "_indicators":                                            // interruptores del usuario (no es del protocolo)
+        $("mic-off").hidden = msg.mic !== false;
+        $("cam-off").hidden = msg.cam !== false;
+        break;
       case "settings":
         if (typeof msg.h24 === "boolean") this.h24 = msg.h24;
         break;

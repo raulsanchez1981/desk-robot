@@ -91,3 +91,33 @@ def window_rect(hwnd: int) -> tuple[int, int, int, int]:
     if IS_WINDOWS and hwnd:
         ctypes.windll.user32.GetWindowRect(wintypes.HWND(hwnd), ctypes.byref(r))
     return (r.left, r.top, r.right - r.left, r.bottom - r.top)
+
+
+def hide_from_taskbar(hwnd: int) -> None:
+    """Fuera de la barra de tareas y de Alt+Tab (WS_EX_TOOLWINDOW): la app vive en la bandeja."""
+    if not IS_WINDOWS or not hwnd:
+        return
+    GWL_EXSTYLE, WS_EX_TOOLWINDOW, WS_EX_APPWINDOW = -20, 0x00000080, 0x00040000
+    user32 = ctypes.windll.user32
+    get = getattr(user32, "GetWindowLongPtrW", user32.GetWindowLongW)
+    set_ = getattr(user32, "SetWindowLongPtrW", user32.SetWindowLongW)
+    style = get(wintypes.HWND(hwnd), GWL_EXSTYLE)
+    set_(wintypes.HWND(hwnd), GWL_EXSTYLE, (style | WS_EX_TOOLWINDOW) & ~WS_EX_APPWINDOW)
+    user32.ShowWindow(wintypes.HWND(hwnd), 0)   # SW_HIDE + SW_SHOWNOACTIVATE: la barra de tareas se entera
+    user32.ShowWindow(wintypes.HWND(hwnd), 4)
+
+
+_mutex = None
+
+
+def single_instance(name: str) -> bool:
+    """True si somos la única copia (mutex con nombre). La segunda copia debe salir."""
+    global _mutex
+    if not IS_WINDOWS:
+        return True
+    # use_last_error: ctypes.windll.kernel32.GetLastError() puede leer el error de otra llamada interna
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    kernel32.CreateMutexW.restype = wintypes.HANDLE
+    kernel32.CreateMutexW.argtypes = [ctypes.c_void_p, wintypes.BOOL, wintypes.LPCWSTR]
+    _mutex = kernel32.CreateMutexW(None, False, "Local\\" + name)
+    return ctypes.get_last_error() != 183   # ERROR_ALREADY_EXISTS
