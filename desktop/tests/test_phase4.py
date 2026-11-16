@@ -52,6 +52,17 @@ class HotkeySettingsTest(unittest.TestCase):
             self.assertEqual(settings.load_hotkeys(path)["sleep"], settings.DEFAULT_HOTKEYS["sleep"])
 
 
+class EchoTailTest(unittest.TestCase):
+    def test_config_value_or_default(self):
+        with tempfile.TemporaryDirectory() as d:
+            path = Path(d) / "config.json"
+            self.assertEqual(settings.load_echo_tail(0.35, path), 0.35)
+            path.write_text('{"echo_tail_s": 0.6}', encoding="utf-8")
+            self.assertEqual(settings.load_echo_tail(0.35, path), 0.6)
+            path.write_text('{"echo_tail_s": 99}', encoding="utf-8")
+            self.assertEqual(settings.load_echo_tail(0.35, path), 0.35)
+
+
 class IconTest(unittest.TestCase):
     def test_red_dot_only_when_something_is_off(self):
         corner = (54, 10)

@@ -21,7 +21,10 @@ import numpy as np
 RATE = 16_000
 MIC_FRAME = 480                 # muestras: 30 ms, como mic.cpp
 HEAD_START_S = 0.2              # colchón antes de empezar a sonar (speak_begin con bytes 0)
-ECHO_TAIL_S = 0.35              # tras la última muestra audible, la sala aún suena: micro cortado este rato más
+# Tras la última muestra audible la sala aún suena: micro cortado este rato más. Medido el 2026-11-16 con altavoces
+# USB y el micro de la webcam: el eco se apaga antes de speak_done y el altavoz tarda ~0,12 s más de lo que
+# declara, así que 0,35 s sobra. Con Bluetooth (más retardo) súbelo con "echo_tail_s" en config.json.
+ECHO_TAIL_S = 0.35
 MOUTH_EVERY_S = 0.04            # nivel de boca 25 veces por segundo, como el mensaje "mouth"
 
 
@@ -31,6 +34,7 @@ class Speaker:
     def __init__(self, on_done: Callable[[dict], None], on_mouth: Callable[[float], None]) -> None:
         self.on_done, self.on_mouth = on_done, on_mouth
         self.volume = 0.7
+        self.echo_tail = ECHO_TAIL_S
         self._lock = threading.Lock()
         self._buf = bytearray()
         self._active = False        # entre speak_begin y el final audible
@@ -118,7 +122,7 @@ class Speaker:
                     and not self._buf and now >= self._drained_at + self.latency
                 if finished:
                     self._active = False
-                    self.quiet_until = now + ECHO_TAIL_S
+                    self.quiet_until = now + self.echo_tail
                     wait_ms = int(max(0.0, self._started_at - self._began_at) * 1000)   # colchón, como la placa
                     underruns, self._drained_at = self._underruns, 0.0
             if finished:

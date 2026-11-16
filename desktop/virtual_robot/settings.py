@@ -86,6 +86,16 @@ def load_hotkeys(path: Path | None = None) -> dict[str, str]:
     return keys
 
 
+def load_echo_tail(default: float, path: Path | None = None) -> float:
+    """"echo_tail_s" de config.json (0-2 s), para altavoces con más retardo; si no, el de por defecto."""
+    path = path or config_dir() / "config.json"
+    try:
+        v = json.loads(path.read_text(encoding="utf-8")).get("echo_tail_s")
+        return float(v) if isinstance(v, (int, float)) and 0 <= v <= 2 else default
+    except (OSError, ValueError, AttributeError):
+        return default
+
+
 def place(state: WindowState, monitors: list[tuple[int, int, int, int]],
           work_area: tuple[int, int, int, int]) -> tuple[int, int, int]:
     """(x, y, ancho) donde abrir la ventana: la posición guardada si sigue viéndose entera en algún monitor

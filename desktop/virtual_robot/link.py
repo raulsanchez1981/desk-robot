@@ -54,6 +54,9 @@ class BrainLink:
         self._ws = None
         self._outbox: asyncio.Queue | None = None
         self.speaker = Speaker(on_done=self._send_json_threadsafe, on_mouth=self._mouth)
+        from .audio import ECHO_TAIL_S
+        from .settings import load_echo_tail
+        self.speaker.echo_tail = load_echo_tail(ECHO_TAIL_S)
         self.mic = Mic(on_frame=self._send_mic_threadsafe, speaker=self.speaker)
         self.camera = Camera(send=self._enqueue, speaking=lambda: self.speaker.speaking, asleep=lambda: self.asleep)
 

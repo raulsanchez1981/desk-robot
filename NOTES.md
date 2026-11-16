@@ -507,3 +507,16 @@ y "No puedo ver nada ahora mismo, cámara no da imagen"; al encenderla vuelve. F
   virtual se iría al tope (el tracker supone cámara en la cabeza). Solución prevista: cámara pan-tilt virtual
   (fase 0, punto d).
 - Modo concentración: necesita `OPENAI_API_KEY` (Decisions API) o cambiarlo por Haiku / detector local.
+
+### Medición de eco con altavoces (2026-11-16)
+
+Micro "Logitech StreamCam" + "Altavoces (USB2.0 Device)", ambos MME; voz de reserva (Helena) con el nivelado del
+cerebro, volumen 0,7; VAD Silero del cerebro sobre la grabación; 3 repeticiones:
+
+- Ruido de la sala: VAD máximo 0,20 en silencio (umbral del cerebro 0,4).
+- El micro oye la voz 0,52 s después de empezar: el altavoz USB tarda ~0,12 s más de los 0,2 s que declara.
+- El último trozo con pinta de voz llega 0,65 s **antes** de `speak_done` (la voz termina con silencio); sin cola
+  de reverberación apreciable. → `ECHO_TAIL_S = 0,35 s` sobra; no se cambia.
+- Riesgos: una voz que acabe en seco (Fish) deja ~0,23 s de margen real; con Bluetooth puede no bastar. Ajustable con
+  `"echo_tail_s"` en `%APPDATA%\desk-robot-virtual\config.json`.
+- La boca puede ir ~0,1 s adelantada respecto al sonido en estos altavoces (usa la latencia declarada).
