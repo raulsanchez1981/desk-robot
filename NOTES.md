@@ -316,3 +316,25 @@ Entorno: Windows 11 Pro, Python 3.13.17 (winget, junto al 3.12 existente), venv 
 - Palabra de activación y transcripción con tu voz (requiere que hables tú).
 - Que el audio se oiga bien: yo no puedo oírlo; la duración de la reproducción cuadra.
 - El launcher (`launcher.py`, dashboard en :8766) en Windows.
+
+### Modo español (`ROBOT_LANGUAGE=es` en `server/.env`)
+
+Todo lo específico del idioma está en `server/brain/language.py`; en los ficheros de Casey solo hay enganches
+pequeños (`config.py` al final, `ears.py` idioma de Whisper + `normalize` sin tildes, `mouth.py` voz por idioma,
+`personality.py` reglas añadidas al prompt). Con `ROBOT_LANGUAGE` vacío o `en` todo se comporta como el original.
+
+- Reconocimiento: `faster-whisper` **small** multilingüe con `language="es"` (base.en solo entiende inglés),
+  revisión fijada `536b0662…`. ~480 MB la primera vez. Si va lento, `base` (ver `language.py`).
+- Activación: "oye / hola / hey / ey Rocky" (y variantes "Roki", "Roqui"…); como en inglés, el nombre solo no
+  basta.
+- Frases sin modelo en español, **sumadas** a las inglesas: dormir ("buenas noches", "Rocky, a dormir"), seguir
+  ("sígueme", "deja de seguirme"), concentración ("para la concentración") y preguntas visuales ("¿qué ves?",
+  "mira esto"…). Se comparan sin tildes.
+- Voz de reserva de Windows elegida por idioma: es-ES → Helena, en-US → Zira (antes usaba la predeterminada del
+  sistema, Helena, también para el inglés).
+- Personalidad: se añade al prompt "contesta siempre en español de España" y, para Rocky, sus muletillas en español
+  ("Pregunta:", "¡Asombroso!", "¡Choca mi puño!") con ejemplos y las cuatro líneas fijas traducidas. Editables en
+  `language.py`. Un personaje del dashboard recibe solo la regla de idioma (sus líneas fijas son las suyas).
+- Probado: 125 tests OK con `ROBOT_LANGUAGE=en` y `=es`; `ask ¿qué es un fin de semana?` → respuesta en español en
+  personaje; `ask gira la cabeza a la izquierda` → `look` izquierda. Primer audio a 1,2-1,8 s.
+- Pendiente: probarlo hablando (tú). Los mensajes de consola del cerebro siguen en inglés ("say hey Rocky").
