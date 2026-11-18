@@ -125,6 +125,45 @@ def forget(args: dict, path: Path | None = None) -> str:
     return f"Forgotten: {'; '.join(f['text'] for f in gone)}"
 
 
+def edit(fid: int, fields: dict, path: Path | None = None) -> dict:
+    """Cambiar un recuerdo desde la página de recuerdos. ValueError si no existe o el texto queda vacío."""
+    with _lock:
+        data = load(path)
+        f = next((x for x in data["facts"] if x["id"] == fid), None)
+        if f is None:
+            raise ValueError(f"no memory #{fid}")
+        if "text" in fields:
+            text = " ".join(str(fields["text"] or "").split())[:MAX_TEXT]
+            if len(text) < 3:
+                raise ValueError("the memory can't be empty")
+            f["text"] = text
+        if "about" in fields:
+            f["about"] = " ".join(str(fields["about"] or "").split())[:40] or None
+        if "date" in fields:
+            f["date"] = _clean_date(fields["date"])
+        if "private" in fields:
+            f["private"] = bool(fields["private"])
+        _save(data, path)
+    return f
+
+
+def console(action: str, payload: dict, path: Path | None = None) -> dict:
+    """Las órdenes de la página de recuerdos (POST /api/memory_*, desktop/virtual_robot/memories.py)."""
+    if action == "memory_add":
+        out = remember({k: payload.get(k) for k in ("about", "date", "private")} | {"fact": payload.get("text")}, path)
+        if not out.startswith(("Saved", "Already")):
+            raise ValueError(out)
+    elif action == "memory_edit":
+        edit(int(payload.get("id") or 0), {k: payload[k] for k in ("text", "about", "date", "private") if k in payload},
+             path)
+    elif action == "memory_delete":
+        if not forget({"id": f"#{int(payload.get('id') or 0)}"}, path).startswith("Forgotten"):
+            raise ValueError("no such memory")
+    elif action != "memory_list":
+        raise ValueError(f"no such control: {action}")
+    return {"facts": load(path)["facts"], "max": MAX_FACTS}
+
+
 def now_note(now: datetime | None = None) -> str:
     """La fecha y la hora, para cada pregunta."""
     now = now or datetime.now()

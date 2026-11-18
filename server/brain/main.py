@@ -1266,6 +1266,13 @@ def _number(payload: dict, key: str, lo: float, hi: float) -> float:
 
 async def _console_command(action: str, payload: dict) -> dict:
     global awake_until, speaker_out
+    # la página de recuerdos (desktop/virtual_robot/memories.py): memory.py e identity.py
+    if action.startswith("memory_"):
+        return memory.console(action, payload)
+    if action.startswith("faces_"):
+        if recognizer is None:
+            raise ValueError("face recognition isn't running")
+        return recognizer.console(action, payload)
     if action == "emotion":
         name = payload.get("name")
         if name not in config.EMOTIONS:

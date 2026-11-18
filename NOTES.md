@@ -1,6 +1,6 @@
 # Robot virtual para Windows — notas de trabajo
 
-## ▶ ESTADO Y CÓMO RETOMAR (actualizado 2026-11-18, sesión 2: memoria paso 2)
+## ▶ ESTADO Y CÓMO RETOMAR (actualizado 2026-11-18, sesión 2: memoria paso 2 y página de recuerdos)
 
 Esta sección es el punto de entrada. Debajo, las notas por fase en orden cronológico (histórico y detalles).
 
@@ -101,6 +101,7 @@ Protocolo, flujo de una respuesta y anti-eco: fase 0 (a) más abajo.
 | Voz Fish `s2.1-pro-free` | ✔ gratis | síntesis y pregunta completa | "acento raro, vale para Rocky" |
 | Personajes (Rocky, Jarvis) | ✔ bandeja → Personaje | e2e Rocky→Jarvis→Rocky | eligió Jarvis |
 | Memoria paso 1 | ✔ remember/forget, fecha | e2e con reinicio del cerebro | sin probar por voz |
+| Página de recuerdos | ✔ bandeja → Recuerdos | cerebro real + ventana real: Jarvis guarda 4 recuerdos por `ask` y aparecen solos; editar, filtrar, borrar; caras sembradas: listar, olvidar, alta sin cámara | sin probar |
 | Memoria paso 2 (caras y gatas) | ✔ código, `brain/identity.py` | webcam **simulada** con fotos: altas, reconocimiento, notas, privados, bajas; `ask` real llama a `remember_face` | **sin probar con la webcam** (estaba desconectada) |
 
 ### Pendiente, por prioridad acordada
@@ -120,7 +121,7 @@ Protocolo, flujo de una respuesta y anti-eco: fase 0 (a) más abajo.
    - Memoria por persona: el campo `about` de `memory.py` ya existe; filtrar o marcar según quién habla.
      Decisión del usuario: **puede contar lo que sabe de él salvo que diga explícitamente lo contrario** (`private`).
    - Ojo: dormido, la percepción solo mira manos; el reconocimiento tendrá que ir despierto o con su propio ritmo.
-2. **Página para ver/editar/borrar recuerdos** (y altas de caras): en el panel de depuración o en el dashboard.
+2. ~~Página para ver/editar/borrar recuerdos~~ hecha (nota "Página de recuerdos" al final).
 3. **Fase 6: rediseño de la interfaz** (pedido): más resolución que los 128×64 escalados, estilo y animaciones
    propios por personaje (p. ej. Jarvis como anillo HUD). `robot.handle(msg)` ya separa protocolo y dibujo.
 4. **Seguimiento de cara** (aplazado por el usuario; "de momento no hacemos nada con mírame/sígueme"). Riesgo
@@ -792,3 +793,29 @@ cerebro, volumen 0,7; VAD Silero del cerebro sobre la grabación; 3 repeticiones
   - Dos gatas muy parecidas se confundirán (el margen hace que salga "un gato que no reconoces" en vez de un
     nombre equivocado).
   - La persona más grande del cuadro se toma por la que habla.
+
+## Página de recuerdos (2026-11-18)
+
+- **Bandeja → "Recuerdos"**: abre una ventana de pywebview (`desktop/virtual_robot/ui/memories.html` +
+  `memories.py`) que pide al cerebro, cada 3 s, todo lo que recuerda y a quién conoce de vista.
+  - Lo que se guarda mientras está abierta aparece solo, marcado como "nuevo".
+  - Buscador, filtros por persona, "Sin persona" y "Privados"; fecha con cuánto falta ("dentro de 32 días").
+  - Editar en el sitio (texto, de quién, fecha, privado), añadir a mano y borrar con doble clic.
+  - Caras: lista de personas y gatos con un punto verde si están en cámara, "Olvidar" con doble clic,
+    "Aprender su cara" (nombre y persona/gato) con el progreso del alta, y los desconocidos que hay en cámara.
+- Todo pasa por la API local del cerebro (8767, `X-Rocky-Console`): `memory_list/add/edit/delete` en
+  `memory.console` y `faces_list/learn/forget` en `Identity.console`. Enganche de 6 líneas en
+  `main._console_command`. Los errores del cerebro (en inglés, para el modelo) se traducen en `memories.py`.
+- **Arreglo importante en `thinking.py` (de Casey)**: `max_tokens` pasa de 200 a 600.
+  - Con 200, cuando el modelo hacía dos `remember` en una respuesta, la segunda llegaba cortada y se guardaba
+    vacía (`remember {}`), aunque el robot decía "anotado". Lo descubrí con la página.
+  - Comprobado con la API en crudo: a 200, `finish length` y `{}`; a 600, las dos llamadas enteras.
+  - Ahora, si una llamada llega cortada, se avisa en el log. Lo que dice sigue limitado por frases.
+- **Probado**:
+  - Cerebro real y ventana real con capturas: 3 frases por `ask` dan 4 recuerdos, entre ellos uno privado y
+    uno con fecha, y aparecen solos; también editar, filtrar y borrar.
+  - Con un `identity.json` sembrado (huellas inventadas): listar, olvidar, y el alta sin cámara da su error
+    en español.
+  - Tests: 145 del cerebro y 36 de la app (5 nuevos de la página y del puente).
+  - Después de las pruebas no queda ni `memory.json` ni `identity/`.
+- Sin probar por el usuario.

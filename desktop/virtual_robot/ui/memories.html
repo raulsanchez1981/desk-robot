@@ -1,0 +1,328 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Robot virtual: recuerdos</title>
+<style>
+  :root { color-scheme: dark; --bg: #121214; --card: #1c1c20; --card2: #222227; --line: #2c2c33; --text: #e8e6e3;
+          --mute: #9a968f; --faint: #6d6a64; --amber: #f2b45c; --amber-dim: rgba(242,180,92,.14); --red: #e5735f;
+          --green: #7cc98a; }
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 18px 18px 40px; background: var(--bg); color: var(--text);
+         font: 14px/1.45 "Segoe UI", system-ui, sans-serif; }
+  header { display: flex; align-items: baseline; gap: 12px; margin-bottom: 14px; flex-wrap: wrap; }
+  h1 { font-size: 20px; margin: 0; font-weight: 600; }
+  #status { color: var(--mute); font-size: 13px; }
+  #status.off { color: var(--red); }
+  .spacer { flex: 1; }
+  section { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px;
+            margin-bottom: 12px; }
+  h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .07em; color: var(--mute); margin: 0 0 10px;
+       font-weight: 600; display: flex; gap: 8px; align-items: center; }
+  h2 .count { color: var(--faint); letter-spacing: 0; text-transform: none; font-weight: 400; }
+  button, select, input { background: #26262c; color: var(--text); border: 1px solid var(--line); border-radius: 8px;
+                          padding: 6px 10px; font: inherit; }
+  button { cursor: pointer; }
+  button:hover { border-color: var(--amber); }
+  button.primary { background: var(--amber); color: #1b1612; border-color: var(--amber); font-weight: 600; }
+  button.ghost { background: transparent; border-color: transparent; color: var(--mute); padding: 4px 8px; }
+  button.ghost:hover { color: var(--text); border-color: var(--line); }
+  button.danger { color: var(--red); }
+  button.danger.sure { background: var(--red); color: #1b1612; border-color: var(--red); }
+  input:focus, select:focus, button:focus-visible { outline: 2px solid var(--amber); outline-offset: 1px; }
+  .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  .hint { color: var(--faint); font-size: 12.5px; }
+  .err { color: var(--red); font-size: 13px; min-height: 0; }
+
+  /* caras */
+  .people { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
+  .who { display: flex; align-items: center; gap: 8px; background: var(--card2); border: 1px solid var(--line);
+         border-radius: 999px; padding: 4px 6px 4px 12px; }
+  .who .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--faint); flex: none; }
+  .who.live { border-color: rgba(124,201,138,.5); }
+  .who.live .dot { background: var(--green); box-shadow: 0 0 0 3px rgba(124,201,138,.18); }
+  .who .kind { color: var(--faint); font-size: 12px; }
+  .who button { padding: 2px 8px; font-size: 12px; border-radius: 999px; }
+  .learning { background: var(--amber-dim); border: 1px solid rgba(242,180,92,.4); border-radius: 8px;
+              padding: 6px 10px; margin-bottom: 10px; }
+
+  /* recuerdos */
+  .toolbar { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
+  .toolbar input[type=search] { flex: 1; min-width: 180px; }
+  .chips { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 12px; }
+  .chip { border-radius: 999px; padding: 3px 11px; font-size: 13px; color: var(--mute); }
+  .chip.on { background: var(--amber-dim); color: var(--amber); border-color: rgba(242,180,92,.5); }
+  .fact { border-top: 1px solid var(--line); padding: 10px 2px; display: grid; grid-template-columns: 1fr auto;
+          gap: 4px 12px; }
+  .fact:first-child { border-top: 0; }
+  .fact.new { animation: glow 4s ease-out; border-radius: 8px; }
+  @keyframes glow { from { background: var(--amber-dim); } to { background: transparent; } }
+  .fact .text { font-size: 15px; overflow-wrap: anywhere; }
+  .meta { grid-column: 1; display: flex; gap: 6px 10px; flex-wrap: wrap; color: var(--mute); font-size: 12.5px; }
+  .tag { background: var(--card2); border: 1px solid var(--line); border-radius: 6px; padding: 0 7px; }
+  .tag.about { color: var(--text); }
+  .tag.private { color: var(--amber); border-color: rgba(242,180,92,.45); }
+  .tag.new { color: #1b1612; background: var(--amber); border-color: var(--amber); font-weight: 600; }
+  .tag.past { color: var(--faint); }
+  .actions { grid-column: 2; grid-row: 1 / span 2; display: flex; gap: 2px; align-items: flex-start; }
+  .edit { display: grid; gap: 8px; grid-column: 1 / -1; background: var(--card2); border: 1px solid var(--line);
+          border-radius: 10px; padding: 10px; }
+  .edit textarea { width: 100%; min-height: 56px; resize: vertical; background: #26262c; color: var(--text);
+                   border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; font: inherit; }
+  .edit .fields { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  .edit label { display: flex; gap: 6px; align-items: center; color: var(--mute); font-size: 13px; }
+  .edit input[type=text] { width: 150px; }
+  .empty { color: var(--mute); padding: 18px 4px; text-align: center; }
+  .empty b { color: var(--text); font-weight: 600; }
+  @media (max-width: 520px) { body { padding: 12px 10px 30px; } .fact { grid-template-columns: 1fr; }
+    .actions { grid-column: 1; grid-row: auto; } }
+</style>
+</head>
+<body>
+<header>
+  <h1>Recuerdos</h1>
+  <span id="status">conectando…</span>
+  <span class="spacer"></span>
+  <button class="primary" id="add">Añadir recuerdo</button>
+</header>
+
+<section id="faces-section">
+  <h2>A quién conoce de vista <span class="count" id="faces-count"></span></h2>
+  <div id="learning"></div>
+  <div class="people" id="people"></div>
+  <div class="row">
+    <input id="learn-name" type="text" placeholder="Nombre de quien está delante" maxlength="40">
+    <select id="learn-kind"><option value="person">persona</option><option value="cat">gato</option></select>
+    <button id="learn">Aprender su cara</button>
+    <span class="hint">o díselo al robot: «recuerda mi cara, soy …»</span>
+  </div>
+  <div class="err" id="faces-err"></div>
+</section>
+
+<section>
+  <h2>Lo que recuerda <span class="count" id="facts-count"></span></h2>
+  <div class="toolbar"><input id="q" type="search" placeholder="Buscar en los recuerdos…"></div>
+  <div class="chips" id="chips"></div>
+  <div class="err" id="facts-err"></div>
+  <div id="list"></div>
+</section>
+
+<script>
+"use strict";
+let api = null;
+const state = { facts: [], faces: null, max: 300, filter: "all", q: "", editing: null, sure: null,
+                known: null, fresh: new Set(), offline: false };
+const $ = (id) => document.getElementById(id);
+
+// h("div", {class: "x", onclick: fn}, "texto", otroNodo): nodos sin innerHTML (los recuerdos son texto libre)
+function h(tag, attrs, ...kids) {
+  const el = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs || {})) {
+    if (v == null || v === false) continue;
+    if (k.startsWith("on")) el.addEventListener(k.slice(2), v);
+    else if (k === "value") el.value = v;
+    else el.setAttribute(k, v === true ? "" : v);
+  }
+  for (const kid of kids.flat()) if (kid != null && kid !== false) el.append(kid);
+  return el;
+}
+
+const MONTHS = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
+function day(iso) {
+  const [y, m, d] = iso.split("-").map(Number);
+  return new Date(y, m - 1, d);
+}
+function fmtDate(iso) {
+  const t = day(iso);
+  return `${t.getDate()} ${MONTHS[t.getMonth()]} ${t.getFullYear()}`;
+}
+function relative(iso) {
+  const now = new Date(); now.setHours(0, 0, 0, 0);
+  const n = Math.round((day(iso) - now) / 86400000);
+  if (n === 0) return "hoy";
+  if (n === 1) return "mañana";
+  if (n === -1) return "ayer";
+  const a = Math.abs(n), unit = a >= 60 ? `${Math.round(a / 30)} meses` : `${a} días`;
+  return n > 0 ? `dentro de ${unit}` : `hace ${unit}`;
+}
+const norm = (s) => (s || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().trim();
+
+// ── datos ──
+async function refresh() {
+  const r = await api.snapshot();
+  state.offline = !!r.offline;
+  if (r.error) {
+    $("status").textContent = r.error;
+    $("status").className = "off";
+    return;
+  }
+  const ids = new Set(r.facts.map((f) => f.id));
+  if (state.known) for (const id of ids) if (!state.known.has(id)) state.fresh.add(id);
+  state.known = ids;
+  state.facts = r.facts;
+  state.max = r.max || state.max;
+  state.faces = r.faces;
+  state.facesError = r.faces_error;
+  $("status").className = "";
+  $("status").textContent = "al día · se actualiza solo";
+  renderFaces();
+  // no repintar la lista mientras se escribe en ella (se perdería el foco)
+  if (!$("list").contains(document.activeElement)) renderFacts();
+}
+
+async function act(promise, errBox) {
+  const r = await promise;
+  $(errBox).textContent = r.error || "";
+  if (!r.error) await refresh();
+  return !r.error;
+}
+
+// ── caras ──
+let learnTimer = null;
+function renderFaces() {
+  const f = state.faces, people = $("people");
+  people.replaceChildren();
+  $("learning").replaceChildren();
+  if (!f) {
+    $("faces-count").textContent = "";
+    people.append(h("span", { class: "hint" }, state.facesError || "El reconocimiento no está en marcha."));
+    return;
+  }
+  if (!f.ready) people.append(h("span", { class: "hint" },
+    f.error ? `Reconocimiento apagado: ${f.error}` : "El reconocimiento está arrancando…"));
+  const now = f.now || {};
+  const entries = [...Object.entries(f.known.people).map(([n, s]) => [n, s, "person"]),
+                   ...Object.entries(f.known.cats).map(([n, s]) => [n, s, "cat"])];
+  $("faces-count").textContent = entries.length ? `${entries.length}` : "";
+  for (const [name, samples, kind] of entries) {
+    const live = (kind === "person" ? now.people : now.cats || []).includes(name);
+    const key = `face:${name}`;
+    people.append(h("div", { class: "who" + (live ? " live" : ""), title: `${samples} muestras` + (live ? " · en cámara ahora" : "") },
+      h("span", { class: "dot" }), name, h("span", { class: "kind" }, kind === "cat" ? "gato" : ""),
+      h("button", { class: "ghost danger" + (state.sure === key ? " sure" : ""), onclick: () => confirmThen(key,
+        () => act(api.forget_face(name), "faces-err")) }, state.sure === key ? "¿Olvidar?" : "Olvidar")));
+  }
+  if (!entries.length && f.ready) people.append(h("span", { class: "hint" }, "Todavía no conoce a nadie de vista."));
+  const unknown = [now.unknown_people ? `${now.unknown_people} persona(s) que no conoce` : "",
+                   now.unknown_cats ? `${now.unknown_cats} gato(s) que no conoce` : ""].filter(Boolean);
+  if (unknown.length) people.append(h("span", { class: "hint" }, `En cámara: ${unknown.join(" y ")}`));
+  if (f.learning) $("learning").append(h("div", { class: "learning" },
+    `Aprendiendo a ${f.learning.name}… que siga delante de la cámara (${Math.ceil(f.learning.left_s)} s, `
+    + `${f.learning.samples} muestras)`));
+  clearTimeout(learnTimer);   // durante un alta, refrescar cada segundo
+  if (f.learning) learnTimer = setTimeout(refresh, 1000);
+}
+
+// ── recuerdos ──
+function matches(f) {
+  if (state.filter === "private" && !f.private) return false;
+  if (state.filter === "none" && f.about) return false;
+  if (!["all", "private", "none"].includes(state.filter) && norm(f.about) !== state.filter) return false;
+  const q = norm(state.q);
+  return !q || norm(`${f.text} ${f.about || ""}`).includes(q);
+}
+
+function renderChips() {
+  const abouts = new Map();
+  for (const f of state.facts) if (f.about) abouts.set(norm(f.about), (abouts.get(norm(f.about)) || [f.about, 0]));
+  for (const f of state.facts) if (f.about) abouts.get(norm(f.about))[1]++;
+  const chips = [["all", "Todos", state.facts.length],
+                 ...[...abouts].sort((a, b) => b[1][1] - a[1][1]).map(([k, [label, n]]) => [k, label, n]),
+                 ["none", "Sin persona", state.facts.filter((f) => !f.about).length],
+                 ["private", "Privados", state.facts.filter((f) => f.private).length]];
+  $("chips").replaceChildren(...chips.filter(([k, , n]) => n || k === "all" || k === state.filter).map(([k, label, n]) =>
+    h("button", { class: "chip" + (state.filter === k ? " on" : ""), onclick: () => { state.filter = k; renderFacts(); } },
+      `${label} · ${n}`)));
+}
+
+function editor(draft, onSave) {
+  const text = h("textarea", { maxlength: 300, placeholder: "p. ej. Raúl tiene tres gatas.", value: draft.text || "" });
+  const about = h("input", { type: "text", maxlength: 40, placeholder: "persona o gata", value: draft.about || "" });
+  const date = h("input", { type: "date", value: draft.date || "" });
+  const priv = h("input", { type: "checkbox", checked: !!draft.private });
+  const err = h("div", { class: "err" });
+  const save = async () => {
+    const r = await onSave({ text: text.value, about: about.value, date: date.value, private: priv.checked });
+    err.textContent = r.error || "";
+    if (!r.error) { state.editing = null; await refresh(); renderFacts(); }
+  };
+  text.addEventListener("keydown", (e) => { if (e.key === "Enter" && (e.ctrlKey || !e.shiftKey)) { e.preventDefault(); save(); } });
+  const box = h("div", { class: "edit" }, text,
+    h("div", { class: "fields" },
+      h("label", {}, "De", about), h("label", {}, "Fecha", date), h("label", {}, priv, "Privado"),
+      h("span", { class: "spacer" }),
+      h("button", { class: "ghost", onclick: () => { state.editing = null; renderFacts(); } }, "Cancelar"),
+      h("button", { class: "primary", onclick: save }, "Guardar")),
+    err);
+  setTimeout(() => text.focus(), 0);
+  return box;
+}
+
+function factRow(f) {
+  if (state.editing === f.id)
+    return h("div", { class: "fact" }, editor(f, (d) => api.edit(f.id, d)));
+  const key = `fact:${f.id}`, isNew = state.fresh.has(f.id);
+  const meta = [
+    isNew && h("span", { class: "tag new" }, "nuevo"),
+    f.about && h("span", { class: "tag about" }, f.about),
+    f.private && h("span", { class: "tag private", title: "Solo lo cuenta con esa persona delante" }, "🔒 privado"),
+    f.date && h("span", { class: "tag" + (relative(f.date).startsWith("hace") ? " past" : "") },
+      `${fmtDate(f.date)} · ${relative(f.date)}`),
+    h("span", {}, `guardado ${f.saved ? relative(f.saved) : ""}`.trim()),
+    h("span", { class: "hint" }, `#${f.id}`),
+  ];
+  return h("div", { class: "fact" + (isNew ? " new" : "") },
+    h("div", { class: "text" }, f.text),
+    h("div", { class: "actions" },
+      h("button", { class: "ghost", onclick: () => { state.editing = f.id; state.sure = null; renderFacts(); } }, "Editar"),
+      h("button", { class: "ghost danger" + (state.sure === key ? " sure" : ""),
+                    onclick: () => confirmThen(key, () => act(api.delete(f.id), "facts-err")) },
+        state.sure === key ? "¿Borrar?" : "Borrar")),
+    h("div", { class: "meta" }, meta));
+}
+
+function renderFacts() {
+  renderChips();
+  const list = $("list");
+  const shown = state.facts.filter(matches).sort((a, b) => b.id - a.id);
+  $("facts-count").textContent = `${state.facts.length} de ${state.max}`;
+  const rows = [];
+  if (state.editing === "new") rows.push(h("div", { class: "fact" }, editor({}, (d) => api.add(d))));
+  rows.push(...shown.map(factRow));
+  if (!state.facts.length && state.editing !== "new")
+    rows.push(h("div", { class: "empty" }, h("b", {}, "Todavía no recuerda nada."), h("br"),
+      "Cuéntale algo que dure («tengo tres gatas», «me voy de vacaciones el 20 de diciembre») y aparecerá aquí."));
+  else if (!shown.length && state.editing !== "new")
+    rows.push(h("div", { class: "empty" }, "Nada coincide con el filtro."));
+  list.replaceChildren(...rows);
+}
+
+// borrar y olvidar piden un segundo clic (3 s)
+let sureTimer = null;
+function confirmThen(key, fn) {
+  clearTimeout(sureTimer);
+  if (state.sure === key) { state.sure = null; fn(); return; }
+  state.sure = key;
+  renderFaces(); renderFacts();
+  sureTimer = setTimeout(() => { state.sure = null; renderFaces(); renderFacts(); }, 3000);
+}
+
+function start() {
+  api = window.pywebview.api;
+  $("add").onclick = () => { state.editing = "new"; state.filter = "all"; renderFacts(); };
+  $("q").oninput = (e) => { state.q = e.target.value; renderFacts(); };
+  $("learn").onclick = async () => {
+    const name = $("learn-name").value.trim();
+    if (!name) { $("faces-err").textContent = "Escribe el nombre de quien está delante."; return; }
+    if (await act(api.learn_face(name, $("learn-kind").value), "faces-err")) $("learn-name").value = "";
+  };
+  $("learn-name").onkeydown = (e) => { if (e.key === "Enter") $("learn").click(); };
+  refresh();
+  setInterval(refresh, 3000);
+}
+if (window.pywebview && window.pywebview.api) start();
+else window.addEventListener("pywebviewready", start);
+</script>
+</body>
+</html>

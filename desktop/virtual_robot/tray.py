@@ -41,6 +41,7 @@ class Tray:
                      checked=lambda _, pid=p["id"]: app.active_character() == pid, radio=True)
                 for p in app.characters()])),
             pystray.Menu.SEPARATOR,
+            item("Recuerdos", self._do(app.open_memories)),
             item("Panel de depuración", self._do(app.open_debug)),
             item("Ajustes y panel web", self._do(app.open_web)),
             item("Reiniciar el cerebro", self._do(app.restart_brain)),

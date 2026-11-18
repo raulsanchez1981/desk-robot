@@ -278,7 +278,9 @@ class RobotBrain:
                 raise Interrupted()
             stream = self.client.chat.completions.create(
                 model=config.MODEL,
-                max_tokens=200,  # backstop; the sentence limit does the real work
+                # backstop; the sentence limit does the real work. 200 cut the second of two `remember` calls
+                # (memory.py) in half and it arrived empty: the tool calls come after the spoken reply
+                max_tokens=600,
                 # memory.py: los recuerdos van al final del prompt de sistema
                 messages=[{"role": "system", "content": personality.SYSTEM_PROMPT + memory.prompt_block(human=config.HUMAN_NAME)},
                           *self.history],
@@ -364,6 +366,7 @@ class RobotBrain:
                     try:
                         args = json.loads(c["arguments"] or "{}")
                     except json.JSONDecodeError:
+                        print(f"  (the model's {c['name']} call came cut off: {c['arguments'][:80]!r})")
                         args = {}
                     action = self.actions.get(c["name"])
                     ok = done = False

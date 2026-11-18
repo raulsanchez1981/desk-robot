@@ -309,6 +309,26 @@ class Identity:
         print(f"  (identity: forgot {', '.join(gone)})")
         return f"Forgotten by sight: {', '.join(gone)}. Their memories are kept unless they ask to forget those too."
 
+    def console(self, action: str, payload: dict) -> dict:
+        """Las órdenes de la página de recuerdos (POST /api/faces_*): quién está dado de alta, altas y bajas."""
+        if action == "faces_learn":
+            out = self.remember_face(payload)
+            if not out.startswith("Learning"):
+                raise ValueError(out)
+        elif action == "faces_forget":
+            out = self.forget_face(payload)
+            if not out.startswith("Forgotten"):
+                raise ValueError(out)
+        elif action != "faces_list":
+            raise ValueError(f"no such control: {action}")
+        with self._lock:
+            known = {g: {n: len(s) for n, s in self.data[g].items()} for g in ("people", "cats")}
+            e = self._enrolling
+            learning = {"name": e["name"], "kind": e["kind"], "left_s": round(max(0.0, e["until"] - time.time()), 1),
+                        "samples": len(e["samples"])} if e else None
+        return {"ready": self.ready, "error": self.error, "enabled": self.enabled, "known": known,
+                "learning": learning, "now": self.who()}
+
     # ── lo que lee el cerebro ──
     def who(self) -> dict:
         """Quién se ve ahora: personas (la más grande primero), gatos y cuántos sin reconocer."""

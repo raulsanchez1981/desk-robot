@@ -15,7 +15,7 @@ from pathlib import Path
 
 import webview
 
-from . import autostart, brain_process, characters, settings, win32
+from . import autostart, brain_process, characters, memories, settings, win32
 
 ROOT = Path(__file__).resolve().parents[2]
 SERVER = ROOT / "server"
@@ -217,6 +217,7 @@ class Controller:
             from .link import BrainLink
             self.link = BrainLink(self.face.send)
         self.debug_window = None
+        self.memories_window = None
         self._want_debug = debug
         self.tray = None
         self.hotkeys = None
@@ -278,7 +279,7 @@ class Controller:
             self.launcher.stop()
         if self.tray is not None:
             self.tray.stop()
-        for w in (self.debug_window, self.face.window):
+        for w in (self.debug_window, self.memories_window, self.face.window):
             if w is not None:
                 try:
                     w.destroy()
@@ -353,6 +354,19 @@ class Controller:
                                   width=480, height=820, min_size=(400, 500))
         w.events.closed += lambda: setattr(self, "debug_window", None)
         self.debug_window = w
+
+    def open_memories(self) -> None:
+        """La ventana de recuerdos (memories.py): lo que recuerda y a quién conoce de vista."""
+        if self.memories_window is not None:
+            try:
+                self.memories_window.show()
+                return
+            except Exception:   # noqa: BLE001 - la cerró el usuario
+                self.memories_window = None
+        w = webview.create_window(memories.TITLE, url=str(UI / "memories.html"), js_api=memories.MemoryApi(),
+                                  width=760, height=860, min_size=(420, 500))
+        w.events.closed += lambda: setattr(self, "memories_window", None)
+        self.memories_window = w
 
     def open_web(self) -> None:
         """El dashboard completo (ajustes, personalidades, caras) si el launcher está; si no, la página del cerebro,
