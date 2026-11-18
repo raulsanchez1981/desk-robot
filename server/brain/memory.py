@@ -21,6 +21,7 @@ import re
 import tempfile
 import threading
 import unicodedata
+from collections.abc import Callable
 from datetime import date, datetime
 from pathlib import Path
 
@@ -28,6 +29,10 @@ PATH = Path(__file__).resolve().parent.parent / "memory.json"
 MAX_FACTS = 300           # de sobra para una casa; por encima se avisa y no se guardan más
 MAX_TEXT = 300
 _lock = threading.Lock()
+# identity.py los rellena al arrancar: quién está delante (None = nadie dado de alta, no se filtra) y su parte del
+# prompt. Con gente dada de alta, los recuerdos privados de alguien solo entran cuando esa persona está delante.
+audience: Callable[[], set[str] | None] = lambda: None
+extra_prompt: Callable[[], str] = lambda: ""
 _DAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
 
 
@@ -129,7 +134,9 @@ def now_note(now: datetime | None = None) -> str:
 def prompt_block(path: Path | None = None, human: str = "") -> str:
     """Los recuerdos y cómo usarlos, para el final del prompt de sistema. human: cómo se llama su humano."""
     who = human if human and human.lower() != "friend" else         "your human, whose name you don't know yet: write \"mi humano\" / \"my human\""
-    facts = load(path)["facts"]
+    present = audience()
+    facts = [f for f in load(path)["facts"]
+             if present is None or not f.get("private") or _norm(f.get("about") or "") in present]
     if facts:
         lines = []
         for f in facts:
@@ -159,7 +166,7 @@ in a memory: they stop being true. Don't save small talk, moods of the moment or
 forget something, do it. When they ask what you know about them, tell them in a sentence or two.
 - If they say something is private or secret, save it with private true and only mention it to them.
 - Never save passwords, card numbers, codes or other secrets of that kind, even if asked.
-- Each question comes with the current date and time: use it for anything about time (how long until a date)."""
+- Each question comes with the current date and time: use it for anything about time (how long until a date)."""         + extra_prompt()
 
 
 TOOLS = [

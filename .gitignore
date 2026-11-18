@@ -53,3 +53,8 @@ pcb/
 
 # Memoria a largo plazo del robot (brain/memory.py): datos personales
 server/memory.json
+
+# Reconocimiento de la familia (brain/identity.py): huellas biométricas y sus modelos
+server/identity/
+server/models/face_recognition_sface_*.onnx
+server/models/*.tflite

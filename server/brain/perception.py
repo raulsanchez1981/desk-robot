@@ -49,8 +49,8 @@ FACE_HALF_WIDTH_M = 0.07
 ASLEEP_FPS = 5.0      # looks per second while he's asleep: hands only, enough to catch a wave
 
 
-def ensure_models() -> None:
-    """Download any missing model (once), checking its SHA-256."""
+def ensure_models(downloads: dict | None = None) -> None:
+    """Download any missing model (once), checking its SHA-256. downloads: another set (identity.py)."""
     MODELS.mkdir(exist_ok=True)
     ctx = None
     try:
@@ -58,7 +58,7 @@ def ensure_models() -> None:
         ctx = ssl.create_default_context(cafile=certifi.where())
     except ImportError:
         pass
-    for name, (url, sha) in DOWNLOADS.items():
+    for name, (url, sha) in (downloads or DOWNLOADS).items():
         path = MODELS / name
         if path.exists():
             continue

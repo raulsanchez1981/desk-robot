@@ -1,6 +1,6 @@
 # Robot virtual para Windows — notas de trabajo
 
-## ▶ ESTADO Y CÓMO RETOMAR (actualizado 2026-11-16, fin de la sesión 1)
+## ▶ ESTADO Y CÓMO RETOMAR (actualizado 2026-11-18, sesión 2: memoria paso 2)
 
 Esta sección es el punto de entrada. Debajo, las notas por fase en orden cronológico (histórico y detalles).
 
@@ -60,6 +60,7 @@ intercambiables (Rocky, Jarvis) y memoria a largo plazo.
 | Ajustes de la app | `%APPDATA%\desk-robot-virtual\config.json` | ventana x=1919 y=169 ancho=686; `hotkeys` mic `Ctrl+Alt+Shift+M`, cam `Ctrl+Alt+C`, sleep `Ctrl+Alt+S`; opcionales `camera_index`, `echo_tail_s` |
 | Logs | `%APPDATA%\desk-robot-virtual\` `brain.log`, `launcher.log`, `app.log` (sin consola) | secretos enmascarados |
 | Memoria | `server/memory.json` (git-ignored) | **no existe** (se borraron los recuerdos de prueba) |
+| Caras y gatas | `server/identity/identity.json` (git-ignored; biométrico) | **no existe**; borrar con "olvida todas las caras" o `faces forget all` |
 | Personajes instalados | `server/characters/jarvis.json` (git-ignored; lo escribe la app desde el paquete) | |
 | Paquetes de personaje | `desktop/characters/<id>/package.json` (en git) | `rocky`, `jarvis` |
 | Arranque con Windows | `HKCU\Software\Microsoft\Windows\CurrentVersion\Run\DeskRobotVirtual` | **no activado**: el entorno no me dejó escribir el registro; el usuario debe marcarlo en la bandeja |
@@ -100,10 +101,13 @@ Protocolo, flujo de una respuesta y anti-eco: fase 0 (a) más abajo.
 | Voz Fish `s2.1-pro-free` | ✔ gratis | síntesis y pregunta completa | "acento raro, vale para Rocky" |
 | Personajes (Rocky, Jarvis) | ✔ bandeja → Personaje | e2e Rocky→Jarvis→Rocky | eligió Jarvis |
 | Memoria paso 1 | ✔ remember/forget, fecha | e2e con reinicio del cerebro | sin probar por voz |
+| Memoria paso 2 (caras y gatas) | ✔ código, `brain/identity.py` | webcam **simulada** con fotos: altas, reconocimiento, notas, privados, bajas; `ask` real llama a `remember_face` | **sin probar con la webcam** (estaba desconectada) |
 
 ### Pendiente, por prioridad acordada
 
-1. **Memoria paso 2: reconocer a la familia (3 personas y 3 gatas) y memoria por persona.** Plan:
+1. **Probar la memoria paso 2 con la webcam de verdad** (ver la nota "Memoria paso 2" al final): dar de alta a
+   las 3 personas y las 3 gatas, comprobar que se reconocen con otra luz y otro ángulo y ajustar `PERSON_MATCH`,
+   `CAT_MATCH` y `CAT_MARGIN` si hace falta. Plan original (hecho):
    - Personas: SFace de OpenCV Zoo (`face_recognition_sface_2021dec.onnx`, ~37 MB, Apache-2.0) sobre las caras de
      YuNet que ya usa `tracker.py`; vector de 128, comparación coseno (umbral de referencia de SFace ≈ 0,363); varias
      muestras por persona al darse de alta ("Rocky, recuerda mi cara, soy Raúl"). Descarga fijada con SHA-256 como
@@ -743,3 +747,48 @@ cerebro, volumen 0,7; VAD Silero del cerebro sobre la grabación; 3 repeticiones
 - `test_focus` falla a veces también sin estos cambios (2 de 8 en HEAD): sensible a tiempos, del proyecto original.
 - Siguiente: paso 2, reconocer a las 3 personas (SFace) y a las 3 gatas (detector "cat" + huella visual), y memoria
   por persona.
+
+## Memoria a largo plazo, paso 2: reconocer a la familia (2026-11-18)
+
+- **`server/brain/identity.py`** (nuevo, nuestro). Va en su propio hilo, mira 1 vez por segundo y solo despierto
+  (durante un alta mira también dormido).
+  - Personas: YuNet, el mismo modelo que `tracker.py` pero con su propia instancia y umbral 0,7, más SFace (huella
+    de 128 números, coseno, `PERSON_MATCH = 0.363`).
+  - Gatos: EfficientDet-Lite0 de MediaPipe (clase `cat`, umbral 0,35) más ImageEmbedder MobileNetV3 sobre el
+    recorte. Reconoce si el parecido es ≥ `CAT_MATCH = 0.80` y gana al segundo gato por `CAT_MARGIN = 0.02`.
+  - Modelos en `server/models/`, fijados con SHA-256 (`perception.ensure_models` acepta ahora otra lista):
+    SFace 38 MB, EfficientDet 7 MB, MobileNet 4 MB. Coste: unos 27 ms por mirada a las caras y unos 28 ms por
+    mirada a los gatos, en CPU.
+- **Herramientas**: `remember_face {name, kind: person|cat}` y `forget_face {name | "all"}`.
+  - El alta junta las muestras de los últimos 3 s y las de los 5 s siguientes (una cada 0,4 s, como mucho 15 por
+    nombre). Al terminar, solo se quedan las que se parecen a la media de las tomadas después de pedirlo: así no se
+    cuela quien estaba delante antes.
+  - Rechaza el alta si esa cara ya es de otra persona.
+- **Nota con cada pregunta** (no solo con foto): "Who your camera recognizes right now, may be wrong: Raúl
+  (most likely the one talking to you); the cat Luna." Los desconocidos solo cuentan si salen en al menos dos
+  miradas (los detectores ven caras o gatos fantasma durante un cuadro).
+- **Privados**: `memory.audience`. Si no hay nadie dado de alta, todo sigue igual que antes. Si hay alguien, los
+  recuerdos `private` de una persona solo entran en el prompt cuando esa persona está delante. El bloque de reglas
+  de la identidad se añade al prompt de memoria (`memory.extra_prompt`).
+- Enganches en `server/`: `main.py` (crear, herramientas, nota, ajuste `perception` del dashboard, `/status`
+  → `identity`, consola `faces` / `faces forget <nombre|all>`), `memory.py` (2 ganchos) y `perception.py`
+  (parámetro de `ensure_models`).
+- **Probado**:
+  - 10 tests unitarios (`tests/test_identity.py`); en total 142 del cerebro y 31 de la app, todos en verde.
+  - Simulación con los modelos reales y una webcam falsa que sirve fotos con variaciones de posición, luz, giro y
+    ruido (lena, messi5 y tres fotos de gatos):
+    - Parecido de una persona consigo misma: 0,94–0,98; entre personas: 0,14.
+    - Parecido de cada gato consigo mismo: 0,90–0,95; entre gatos: 0,15–0,43.
+    - Las 5 altas y los 5 reconocimientos salen bien, también el privado y las bajas.
+  - Arranque real del cerebro ("identity: on") y `ask "recuerda mi cara, soy Raúl"` con Haiku: llama a
+    `remember_face` y, como no había cámara, dice que no le llega imagen.
+- **Sin probar**: con la webcam real (estaba desconectada), con luz de casa y con las gatas de verdad.
+- Problemas que encontré y arreglé con la simulación:
+  - Las muestras de antes del alta eran de otro gato y contaminaban el alta.
+  - Un gato fantasma de un solo cuadro en una foto de una persona.
+  - Mirando a los gatos cada 2 s quedaban pocas miradas en la ventana de 4 s; ahora cada 1 s.
+- Límites conocidos:
+  - YuNet a veces toma caras de perro por caras de persona: saldrá como "persona desconocida".
+  - Dos gatas muy parecidas se confundirán (el margen hace que salga "un gato que no reconoces" en vez de un
+    nombre equivocado).
+  - La persona más grande del cuadro se toma por la que habla.

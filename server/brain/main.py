@@ -45,13 +45,14 @@ import time
 
 import websockets
 
-from . import computer, config, decisions, faces, memory, mouth, personality, settings
+from . import computer, config, decisions, faces, identity, memory, mouth, personality, settings
 from . import focus as focus_mode
 from .body import Body
 from .dance import Dancer, length as dance_length
 from .thinking import Interrupted, RobotBrain
 from .ears import Ears, normalize, strip_wake_word
 from .eyes import Eyes, rotate_jpeg
+from .identity import Identity
 from .perception import Perception
 from .tracker import Tracker
 
@@ -73,6 +74,7 @@ eyes = Eyes()
 head_moves: asyncio.Queue[tuple[float | None, float | None, bool]] = asyncio.Queue()
 tracker: Tracker | None = None
 perception: Perception | None = None
+recognizer: Identity | None = None   # identity.py: quién es quién (familia y gatos)
 body: Body | None = None   # small head moves while he talks (body.py)
 focus = focus_mode.Focus()   # focus sessions: he keeps you off your phone (focus.py)
 # The newest sharp still from the robot (rotated like the stream) and when it arrived; asked for as soon as you
@@ -318,6 +320,13 @@ async def handle_console_line(line: str) -> bool:
         facts = memory.load()["facts"]
         print("\n".join(f"#{x['id']} {x['text']}" + (f" ({x['date']})" if x.get("date") else "") for x in facts)
               or "(no memories yet)")
+    elif cmd == "faces":   # identity.py: a quién conoce y a quién ve; `faces forget <nombre|all>`
+        if recognizer is None:
+            print("(identity not running)")
+        elif arg.lower().startswith("forget"):
+            print(recognizer.forget_face({"name": arg[6:].strip()}))
+        else:
+            print(f"known: {recognizer._known_line() or 'nobody'}  |  in view: {recognizer.who()}")
     elif cmd == "emo":
         if arg in config.EMOTIONS:
             await send_to_robot({"type": "emotion", "name": arg})
@@ -580,6 +589,9 @@ ABILITIES = {
     # memory.py: lo que su humano le cuenta, entre conversaciones (plain functions, como las del ordenador)
     "remember": lambda args: (memory.remember(args), None),
     "forget": lambda args: (memory.forget(args), None),
+    # identity.py: aprender y olvidar caras
+    "remember_face": lambda args: (recognizer.remember_face(args) if recognizer else "Can't learn faces now.", None),
+    "forget_face": lambda args: (recognizer.forget_face(args) if recognizer else "Can't forget faces now.", None),
     # the computer abilities (computer.py) are plain functions: no event loop, nothing sent to the robot
     **{name: (lambda fn: lambda args: (fn(args), None))(fn) for name, fn in computer.ACTIONS.items()},
 }
@@ -614,6 +626,8 @@ def apply_settings(s: dict) -> None:
     config.CAMERA_STREAM_SIZE = v["stream"]
     if perception is not None:
         perception.enabled = config.PERCEPTION
+    if recognizer is not None:
+        recognizer.enabled = config.PERCEPTION
     for sec in ("listening", "voice"):
         for key, value in s[sec].items():
             if value is not None:
@@ -1117,6 +1131,9 @@ async def converse(question: str, ended_at: float | None = None, heard_at: float
     # other questions it only invited him to talk about how you look in answers that had nothing to do with it.
     notes = perception.describe() \
         if perception is not None and config.PERCEPTION and (camera_wanted or jpeg is not None) else ""
+    # identity.py: quién está delante, con cada pregunta (para saber de quién es lo que cuenta)
+    who = recognizer.describe() if recognizer is not None and config.PERCEPTION else ""
+    notes = " ".join(x for x in (notes, who) if x)
     if notes:
         print("  " + notes)
     reply = SpokenReply(loop, tl)
@@ -1215,6 +1232,7 @@ def console_state() -> dict:
         "emotion": current_emotion,
         "emotions": config.EMOTIONS,
         "notices": perception.summary() if perception is not None and config.PERCEPTION else None,
+        "identity": recognizer.who() if recognizer is not None and config.PERCEPTION else None,
         "voice": {k: getattr(config, k) for k in VOICE_TUNABLE},
         "head_held": head_held,
         "tracking_enabled": tracker.enabled if tracker is not None else False,
@@ -1623,12 +1641,13 @@ async def main() -> None:
           f"dashboard on :8766 adds settings and a Start button)")
     if not os.environ.get("ROBOT_TOKEN"):
         print("WARNING: ROBOT_TOKEN is not set in server/.env — the robot will be refused")
-    global tracker, brain, main_loop, perception, body, dancer
+    global tracker, brain, main_loop, perception, body, dancer, recognizer
     apply_settings(settings.load())
     loop = asyncio.get_running_loop()
     main_loop = loop
-    brain = RobotBrain(ABILITIES, quick=computer.QUICK | memory.QUICK, extra_tools=lambda: (
-        computer.tools(computer.controller) + memory.TOOLS + ([focus_mode.TOOL] if decisions.available() else [])))
+    brain = RobotBrain(ABILITIES, quick=computer.QUICK | memory.QUICK | identity.QUICK,
+                       extra_tools=lambda: (
+        computer.tools(computer.controller) + memory.TOOLS + identity.TOOLS + ([focus_mode.TOOL] if decisions.available() else [])))
     tracker = Tracker(eyes, lambda p, t, on: loop.call_soon_threadsafe(head_moves.put_nowait, (p, t, on)))
     body = Body(send_to_robot, tracker)
     dancer = Dancer(send_to_robot, tracker)
@@ -1643,10 +1662,14 @@ async def main() -> None:
                                  or time.time() < roam_moving_until or dancer.dancing)
     perception.enabled = config.PERCEPTION
     tracker.perception = perception   # its boxes go on the live view
+    recognizer = Identity(eyes)
+    recognizer.awake, recognizer.paused, recognizer.enabled = perception.awake, perception.paused, config.PERCEPTION
+    memory.audience, memory.extra_prompt = recognizer.audience, recognizer.prompt_block
     focus.frame = eyes.latest
     focus.busy = focus_busy
     focus.react = focus_react
     perception.start()
+    recognizer.start()
     tracker.start()
     print("face tracking:", "on" if config.TRACKING else f"off — say \"{config.ROBOT_NAME}, track me\" or type `track on`")
     print("type `ask <question>` to talk to the brain right now\n")
